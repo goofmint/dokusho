@@ -264,31 +264,13 @@ struct ImageReaderScreen: View {
         return try? modelContext.fetch(descriptor).first
     }
 
-    /// Fetches the series' reading direction. KomgaKit exposes no `series(id:)`,
-    /// so we page the book's library until we find the matching series (capped so
-    /// a huge library never blocks the reader). Returns `nil` if not found.
+    /// Fetches the series' reading direction. Returns `nil` when the series
+    /// cannot be fetched (the caller then defaults to LTR).
     private func fetchSeriesDirection() async -> KomgaReadingDirection? {
-        let targetSeriesID = book.seriesId
-        let pageSize = 100
-        let maxPages = 20 // up to 2000 series before we give up and default to LTR
-        var page = 0
-        while page < maxPages {
-            do {
-                let result = try await client.series(
-                    libraryID: book.libraryId,
-                    search: nil,
-                    page: page,
-                    size: pageSize
-                )
-                if let match = result.content.first(where: { $0.id == targetSeriesID }) {
-                    return match.metadata.readingDirection
-                }
-                if result.last { break }
-                page += 1
-            } catch {
-                break
-            }
+        do {
+            return try await client.series(id: book.seriesId).metadata.readingDirection
+        } catch {
+            return nil
         }
-        return nil
     }
 }

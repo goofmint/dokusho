@@ -70,6 +70,15 @@ struct ClientListTests {
         #expect(book.id == "0BOOK0001")
         #expect(harness.lastRequest?.url?.path == "/api/v1/books/0BOOK0001")
     }
+
+    @Test("series by id hits series/{id}")
+    func seriesByID() async throws {
+        let harness = try MockHarness()
+        harness.stub { _ in .init(data: try Fixture.data("series")) }
+        let series = try await harness.client.series(id: "0SERIES01")
+        #expect(series.id == "0SERIES01")
+        #expect(harness.lastRequest?.url?.path == "/api/v1/series/0SERIES01")
+    }
 }
 
 @Suite("Error mapping via client")

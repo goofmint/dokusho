@@ -63,6 +63,11 @@ public struct KomgaClient: Sendable {
         )
     }
 
+    /// Fetches a single series by id.
+    public func series(id: String) async throws -> KomgaSeries {
+        try await get(path: "/api/v1/series/\(id)")
+    }
+
     /// Fetches a single book by id.
     public func book(id: String) async throws -> KomgaBook {
         try await get(path: "/api/v1/books/\(id)")
