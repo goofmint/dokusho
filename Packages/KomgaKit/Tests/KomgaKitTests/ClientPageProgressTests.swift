@@ -25,6 +25,19 @@ struct ClientPageProgressTests {
         #expect(request.value(forHTTPHeaderField: "X-API-Key") == TestConfig.apiKey)
     }
 
+    // Sending Accept: application/json to image/file endpoints makes Komga's
+    // content negotiation answer 406, so these must ask for the right types.
+    @Test("image and file requests send a non-JSON Accept header")
+    func binaryAcceptHeaders() throws {
+        let client = KomgaClient(config: try TestConfig.make())
+        let page = try client.pageImageRequest(bookID: "b", page: 1, convert: nil)
+        #expect(page.value(forHTTPHeaderField: "Accept") == "image/*")
+        let thumb = try client.thumbnailRequest(for: .series(id: "s1"))
+        #expect(thumb.value(forHTTPHeaderField: "Accept") == "image/*")
+        let file = try client.fileDownloadRequest(bookID: "b")
+        #expect(file.value(forHTTPHeaderField: "Accept") == "*/*")
+    }
+
     @Test("pageImageRequest adds convert=jpeg")
     func pageImageConvertJpeg() throws {
         let client = KomgaClient(config: try TestConfig.make())

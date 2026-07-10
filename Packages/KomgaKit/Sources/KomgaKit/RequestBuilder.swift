@@ -21,19 +21,23 @@ struct RequestBuilder: Sendable {
     ///   - path: The API path, e.g. `/api/v1/libraries`.
     ///   - queryItems: Query items to append. Empty items are ignored.
     ///   - body: An optional request body (already-encoded JSON).
+    ///   - accept: The `Accept` header value. Defaults to JSON; image and
+    ///     file endpoints must override this — sending `application/json`
+    ///     there makes Komga's content negotiation answer 406.
     /// - Returns: A fully-formed request with the API key header set.
     /// - Throws: ``KomgaError/insecureURL`` if the resolved URL is malformed.
     func makeRequest(
         method: String = "GET",
         path: String,
         queryItems: [URLQueryItem] = [],
-        body: Data? = nil
+        body: Data? = nil,
+        accept: String = "application/json"
     ) throws -> URLRequest {
         let url = try resolve(path: path, queryItems: queryItems)
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue(apiKey, forHTTPHeaderField: Self.apiKeyHeader)
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(accept, forHTTPHeaderField: "Accept")
         if let body {
             request.httpBody = body
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")

@@ -159,7 +159,8 @@ public struct KomgaClient: Sendable {
         }
         return try builder.makeRequest(
             path: "/api/v1/books/\(bookID)/pages/\(page)",
-            queryItems: query
+            queryItems: query,
+            accept: "image/*"
         )
     }
 
@@ -167,14 +168,14 @@ public struct KomgaClient: Sendable {
 
     /// Builds a request to download a book's original file (ePub/PDF).
     public func fileDownloadRequest(bookID: String) throws -> URLRequest {
-        try builder.makeRequest(path: "/api/v1/books/\(bookID)/file")
+        try builder.makeRequest(path: "/api/v1/books/\(bookID)/file", accept: "*/*")
     }
 
     // MARK: - Thumbnail
 
     /// Builds a request for a resource's thumbnail image.
     public func thumbnailRequest(for target: ThumbnailTarget) throws -> URLRequest {
-        try builder.makeRequest(path: target.path)
+        try builder.makeRequest(path: target.path, accept: "image/*")
     }
 
     // MARK: - Progress
