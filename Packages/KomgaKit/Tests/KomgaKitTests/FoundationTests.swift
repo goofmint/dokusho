@@ -15,6 +15,27 @@ struct FoundationTests {
         #expect(config.apiKey == "k")
     }
 
+    // A trailing-slash base produced https://host//api/... which Komga's
+    // security layer rejects as non-normalized (surfaced as 400/502).
+    @Test(
+        "trailing-slash bases never produce double slashes",
+        arguments: [
+            ("https://komga.example.com/", "https://komga.example.com/api/v1/libraries"),
+            ("https://komga.example.com", "https://komga.example.com/api/v1/libraries"),
+            ("https://host.example/komga/", "https://host.example/komga/api/v1/libraries"),
+            ("https://host.example/komga", "https://host.example/komga/api/v1/libraries"),
+        ]
+    )
+    func normalizesTrailingSlash(base: String, expected: String) throws {
+        let config = try KomgaServerConfig(
+            baseURL: URL(string: base)!,
+            apiKey: "k"
+        )
+        let builder = RequestBuilder(config: config)
+        let request = try builder.makeRequest(path: "/api/v1/libraries")
+        #expect(request.url?.absoluteString == expected)
+    }
+
     @Test("http base URL is rejected as insecure")
     func rejectsHTTP() {
         #expect(throws: KomgaError.insecureURL) {

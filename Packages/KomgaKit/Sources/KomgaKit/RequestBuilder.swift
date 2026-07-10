@@ -47,15 +47,19 @@ struct RequestBuilder: Sendable {
 
     /// Resolves an absolute URL for a path against the base URL, appending
     /// non-empty query items.
+    ///
+    /// Joins paths explicitly (base path with trailing slashes stripped +
+    /// `path` starting with `/`) — `appendingPathComponent` would produce a
+    /// double slash for trailing-slash bases, which Komga rejects.
     private func resolve(path: String, queryItems: [URLQueryItem]) throws -> URL {
-        guard
-            var components = URLComponents(
-                url: baseURL.appendingPathComponent(path),
-                resolvingAgainstBaseURL: false
-            )
-        else {
+        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw KomgaError.insecureURL
         }
+        var basePath = components.path
+        while basePath.hasSuffix("/") {
+            basePath.removeLast()
+        }
+        components.path = basePath + path
         let filtered = queryItems.filter { item in
             guard let value = item.value else { return false }
             return !value.isEmpty
