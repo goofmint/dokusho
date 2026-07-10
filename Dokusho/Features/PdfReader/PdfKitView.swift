@@ -6,10 +6,16 @@ import PDFKit
 /// PDFKit configuration:
 /// - `usePageViewController(true, …)`: swipe-based paging without the page-curl
 ///   animation, giving a book-like feel with native gesture handling.
-/// - `.singlePage` in portrait, `.twoUp` in landscape (spread / 見開き). Switching
-///   is done live on trait/bounds changes.
+/// - `.twoUp` (spread / 見開き) when the view is landscape **or** the horizontal
+///   size class is regular (iPad, design.md §2.3); `.singlePage` otherwise.
+///   `displaysAsBook = true` keeps the cover standalone so pairs are
+///   (2,3),(4,5)…, matching the image reader. Switching is done live on
+///   trait/bounds changes.
 /// - `autoScales = true` with `minScaleFactor`/`maxScaleFactor` so native pinch
-///   zoom works within sensible bounds.
+///   zoom works within sensible bounds. The fit scale is recomputed on every
+///   bounds change (initial layout, rotation, split view) because the value
+///   captured at `makeUIView` time — before the view has its final bounds — is
+///   meaningless and would leave pages rendered small, especially on iPad.
 /// - `displaysRTL` follows the reading-direction toggle.
 ///
 /// Page changes are surfaced through `PDFViewPageChangedNotification` and mapped
@@ -34,13 +40,12 @@ struct PdfKitView: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> PDFView {
-        let pdfView = PDFView()
+        let pdfView = LayoutAwarePdfView()
         pdfView.document = document
         pdfView.displayMode = .singlePage
         pdfView.displayDirection = .horizontal
         pdfView.usePageViewController(true, withViewOptions: nil)
         pdfView.autoScales = true
-        pdfView.minScaleFactor = pdfView.scaleFactorForSizeToFit
         pdfView.maxScaleFactor = 5.0
         pdfView.displaysRTL = displaysRTL
         pdfView.backgroundColor = .clear
@@ -53,6 +58,15 @@ struct PdfKitView: UIViewRepresentable {
         context.coordinator.observe(pdfView)
         context.coordinator.installTapRecognizer(on: pdfView)
         context.coordinator.applySpread(to: pdfView)
+
+        // Bounds are not final at make time (often zero), so spread mode and the
+        // fit scale are (re)applied from `layoutSubviews` — the only hook that
+        // reliably fires after rotation, split-view resizes and the first layout.
+        let coordinator = context.coordinator
+        pdfView.onLayoutChange = { [weak coordinator, weak pdfView] in
+            guard let coordinator, let pdfView else { return }
+            coordinator.handleLayoutChange(of: pdfView)
+        }
 
         return pdfView
     }
@@ -93,8 +107,13 @@ struct PdfKitView: UIViewRepresentable {
         private var observer: NSObjectProtocol?
         private var lastReportedPage: Int?
         /// While `true`, transient `PDFViewPageChanged` notifications fired during
-        /// a reading-direction relayout are ignored so progress isn't corrupted.
+        /// a reading-direction relayout or a display-mode switch are ignored so
+        /// progress isn't corrupted.
         private var suppressesPageChanges = false
+        /// Bounds the fit scale and spread mode were last computed for; layout
+        /// callbacks with unchanged bounds are ignored (cheap early-out, and it
+        /// stops the relayout a mode switch itself triggers from recursing).
+        private var lastLayoutBounds: CGRect = .zero
 
         init(onPageChanged: @escaping (Int) -> Void, onTap: @escaping (CGFloat) -> Void) {
             self.onPageChanged = onPageChanged
@@ -199,17 +218,58 @@ struct PdfKitView: UIViewRepresentable {
             pdfView = nil
         }
 
-        /// Switch between `.singlePage` (portrait) and `.twoUp` (landscape spread)
-        /// based on the current bounds aspect ratio. Preserves the current page.
+        /// Called from `layoutSubviews` whenever the view's bounds changed:
+        /// re-evaluates the spread mode and refreshes the fit scale. This is
+        /// what fixes the "page renders small on iPad" defect — the fit scale
+        /// captured before the first layout is meaningless and `PDFView` never
+        /// recomputes it on its own.
+        func handleLayoutChange(of pdfView: PDFView) {
+            let bounds = pdfView.bounds
+            guard bounds.width > 0, bounds.height > 0 else { return }
+            guard bounds != lastLayoutBounds else { return }
+            lastLayoutBounds = bounds
+
+            applySpread(to: pdfView)
+            refreshFitScale(of: pdfView)
+        }
+
+        /// Switch between `.singlePage` and `.twoUp` (spread / 見開き). Spreads are
+        /// used when the view is landscape **or** the horizontal size class is
+        /// regular (iPad), matching the image reader (design.md §2.3). The cover
+        /// stays standalone via `displaysAsBook`, the current page is preserved,
+        /// and transient page-change notifications are suppressed across the
+        /// switch (same pattern as the reading-direction relayout).
         func applySpread(to pdfView: PDFView) {
             let isLandscape = pdfView.bounds.width > pdfView.bounds.height
-            let desired: PDFDisplayMode = isLandscape ? .twoUp : .singlePage
+            let isRegularWidth = pdfView.traitCollection.horizontalSizeClass == .regular
+            let desired: PDFDisplayMode = (isLandscape || isRegularWidth) ? .twoUp : .singlePage
             guard pdfView.displayMode != desired else { return }
+
+            suppressesPageChanges = true
+            defer { suppressesPageChanges = false }
 
             let current = pdfView.currentPage
             pdfView.displayMode = desired
+            // Book layout: page 1 (cover) alone, then pairs (2,3),(4,5)… —
+            // consistent with the image reader's spread rules.
+            pdfView.displaysAsBook = desired == .twoUp
             if let current {
                 pdfView.go(to: current)
+            }
+            refreshFitScale(of: pdfView)
+        }
+
+        /// Recomputes the size-to-fit scale for the current bounds/display mode.
+        /// The minimum zoom always tracks the fit scale; the visible scale is
+        /// re-applied only when the user is at (or below) fit — a deliberate
+        /// pinch-zoom-in survives rotations and mode switches.
+        private func refreshFitScale(of pdfView: PDFView) {
+            let fit = pdfView.scaleFactorForSizeToFit
+            guard fit > 0 else { return }
+            let wasAtFit = pdfView.scaleFactor <= pdfView.minScaleFactor + 0.001
+            pdfView.minScaleFactor = fit
+            if wasAtFit || pdfView.scaleFactor < fit {
+                pdfView.scaleFactor = fit
             }
         }
 
@@ -235,5 +295,21 @@ struct PdfKitView: UIViewRepresentable {
             lastReportedPage = oneBased
             onPageChanged(oneBased)
         }
+    }
+}
+
+/// `PDFView` subclass that reports layout passes so the fit scale and spread
+/// mode can be refreshed whenever the bounds actually change (first layout,
+/// rotation, split-view resize). `PDFView` offers no delegate hook for this,
+/// and SwiftUI's `updateUIView` is not guaranteed to run after the final
+/// bounds are set — `layoutSubviews` is.
+private final class LayoutAwarePdfView: PDFView {
+    /// Invoked after every layout pass; the coordinator early-outs when the
+    /// bounds did not change.
+    var onLayoutChange: (() -> Void)?
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onLayoutChange?()
     }
 }
