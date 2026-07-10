@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// Root view. Routes between the connection screen and the main UI based on
 /// whether a usable connection exists.
@@ -25,6 +26,16 @@ struct ContentView: View {
             guard !didAttemptRestore else { return }
             didAttemptRestore = true
             restoreIfPossible()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: UIApplication.didReceiveMemoryWarningNotification
+            )
+        ) { _ in
+            // Free in-memory cached images under memory pressure; disk is kept.
+            if let loader = services.imageLoader {
+                Task { await loader.purgeMemory() }
+            }
         }
     }
 

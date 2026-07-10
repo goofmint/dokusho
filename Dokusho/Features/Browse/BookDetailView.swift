@@ -1,0 +1,140 @@
+import SwiftUI
+import KomgaKit
+
+/// Book detail: cover, metadata, read progress, and the 読む / ダウンロード
+/// actions. Only ePub/PDF books can be opened; other formats show a
+/// 非対応フォーマット notice.
+///
+/// The 読む action pushes ``ReaderDestination/book(_:)`` (a placeholder until
+/// Phase 5). The ダウンロード button is a placeholder wired by the Downloads
+/// agent (Phase 6).
+struct BookDetailView: View {
+    let book: KomgaBook
+
+    @Environment(AppServices.self) private var services
+
+    private var isSupported: Bool { SupportedMediaProfile.isSupported(book.media.mediaProfile) }
+
+    private var displayTitle: String {
+        book.metadata.title.isEmpty ? book.name : book.metadata.title
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                header
+                actions
+                if !isSupported {
+                    unsupportedNotice
+                }
+                metadataSection
+            }
+            .padding()
+        }
+        .navigationTitle(displayTitle)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 16) {
+            ThumbnailImageView(target: .book(id: book.id))
+                .aspectRatio(0.7, contentMode: .fit)
+                .frame(width: 120)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(displayTitle)
+                    .font(.headline)
+                Text(book.seriesTitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                BookProgressLabel(book: book)
+                Text(formatLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        VStack(spacing: 12) {
+            if isSupported {
+                NavigationLink(value: ReaderDestination.book(book)) {
+                    Label(readButtonTitle, systemImage: "book")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
+            // Placeholder: the Downloads agent (Phase 6) replaces this action
+            // with the real DownloadManager call.
+            Button {
+                // Intentionally no-op until Phase 6.
+            } label: {
+                Label("ダウンロード", systemImage: "arrow.down.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .disabled(!isSupported)
+        }
+    }
+
+    private var unsupportedNotice: some View {
+        Label("非対応フォーマットのため開けません（対応形式: ePub / PDF）", systemImage: "exclamationmark.triangle")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private var metadataSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if !book.metadata.summary.isEmpty {
+                Text("概要").font(.headline)
+                Text(book.metadata.summary)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            }
+
+            let authors = book.metadata.authors
+            if !authors.isEmpty {
+                Divider()
+                Text("著者").font(.headline)
+                ForEach(Array(authors.enumerated()), id: \.offset) { _, author in
+                    HStack {
+                        Text(author.name)
+                        Spacer()
+                        Text(author.role).foregroundStyle(.secondary)
+                    }
+                    .font(.callout)
+                }
+            }
+
+            Divider()
+            LabeledContent("ページ数", value: "\(book.media.pagesCount)")
+            LabeledContent("形式", value: book.media.mediaProfile)
+            LabeledContent("サイズ", value: byteCountText(book.sizeBytes))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var readButtonTitle: String {
+        if let progress = book.readProgress, !progress.completed, progress.page > 1 {
+            return "続きから読む"
+        }
+        return "読む"
+    }
+
+    private var formatLabel: String {
+        "\(book.media.mediaProfile) ・ \(book.media.pagesCount)ページ"
+    }
+
+    private func byteCountText(_ bytes: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+    }
+}

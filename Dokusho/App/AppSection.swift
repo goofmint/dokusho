@@ -37,6 +37,10 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
     }
 
     /// The destination view for this section.
+    ///
+    /// Main-actor isolated because the destination views own `@MainActor`
+    /// view-model state whose initializers are main-actor isolated.
+    @MainActor
     @ViewBuilder
     var destination: some View {
         switch self {
