@@ -48,12 +48,7 @@ struct ReaderRootView: View {
     @ViewBuilder
     private var pdfReader: some View {
         if let fileURL = services.downloadManager?.localURL(for: book.id) {
-            // INTEGRATION: PdfReaderScreen(book:fileURL:onProgress:)
-            // Expected signature (implemented by the PdfReader agent):
-            //   PdfReaderScreen(book: KomgaBook, fileURL: URL,
-            //                   onProgress: @MainActor @escaping (Int, Bool) -> Void)
-            // where onProgress is (1-based page, completed).
-            integrationPlaceholder(title: "PDFリーダー（統合待ち）", fileURL: fileURL)
+            PdfReaderScreen(book: book, fileURL: fileURL, onProgress: recordProgress)
         } else if let imageLoader = services.imageLoader, let client = services.client {
             ImageReaderScreen(
                 book: book,
@@ -71,36 +66,13 @@ struct ReaderRootView: View {
     @ViewBuilder
     private var epubReader: some View {
         if let fileURL = services.downloadManager?.localURL(for: book.id) {
-            // INTEGRATION: EpubReaderScreen(book:fileURL:onProgress:)
-            // Expected signature (implemented by the EpubReader agent):
-            //   EpubReaderScreen(book: KomgaBook, fileURL: URL,
-            //                    onProgress: @MainActor @escaping (Int, Bool) -> Void)
-            // where onProgress is (1-based page, completed).
-            integrationPlaceholder(title: "ePubリーダー（統合待ち）", fileURL: fileURL)
+            EpubReaderScreen(book: book, fileURL: fileURL, onProgress: recordProgress)
         } else {
             downloadPrompt
         }
     }
 
     // MARK: - Sub-screens
-
-    /// Temporary stand-in for a not-yet-integrated downloaded reader. The
-    /// orchestrator swaps this for the real `PdfReaderScreen` / `EpubReaderScreen`.
-    private func integrationPlaceholder(title: String, fileURL: URL) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: "book.closed")
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
-            Text(title)
-                .font(.headline)
-            Text("ダウンロード済みファイルの表示は統合後に有効化されます。")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding()
-        .navigationTitle("読む")
-    }
 
     private var downloadPrompt: some View {
         DownloadPromptView(book: book)
