@@ -233,17 +233,44 @@ public struct KomgaClient: Sendable {
 
     /// Executes a request, validating the status code, returning the body data.
     private func perform(_ request: URLRequest) async throws -> Data {
+        Self.logRequest(request)
         let data: Data
         let response: URLResponse
         do {
             (data, response) = try await session.data(for: request)
         } catch let urlError as URLError {
+            Self.logger.error("Request failed: \(urlError.localizedDescription, privacy: .public)")
             throw KomgaError.network(urlError)
         } catch {
             throw KomgaError.network(URLError(.unknown))
         }
+        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let body = String(decoding: data.prefix(500), as: UTF8.self)
+            Self.logger.error(
+                "HTTP \(http.statusCode) for \(request.url?.absoluteString ?? "?", privacy: .public) body: \(body, privacy: .public)"
+            )
+        }
         try Self.validate(response)
         return data
+    }
+
+    /// Logs the outgoing request URL and a masked form of the API key so
+    /// authentication problems are diagnosable without leaking the secret.
+    static func logRequest(_ request: URLRequest) {
+        let method = request.httpMethod ?? "GET"
+        let url = request.url?.absoluteString ?? "?"
+        let key = request.value(forHTTPHeaderField: RequestBuilder.apiKeyHeader)
+        let masked: String
+        if let key, key.count > 6 {
+            masked = "\(key.prefix(4))…\(key.suffix(2)) (len \(key.count))"
+        } else if let key {
+            masked = "set (len \(key.count))"
+        } else {
+            masked = "MISSING"
+        }
+        logger.info(
+            "→ \(method, privacy: .public) \(url, privacy: .public) X-API-Key: \(masked, privacy: .public)"
+        )
     }
 
     /// Executes a request expecting an empty/ignored body, validating status.

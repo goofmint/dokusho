@@ -282,6 +282,9 @@ actor PageImageLoader {
 
     /// Executes an image request, validating the HTTP status.
     private func performData(_ request: URLRequest) async throws -> Data {
+        let url = request.url?.absoluteString ?? "?"
+        let hasKey = request.value(forHTTPHeaderField: "X-API-Key") != nil
+        logger.info("→ GET \(url, privacy: .public) X-API-Key: \(hasKey ? "set" : "MISSING", privacy: .public)")
         let data: Data
         let response: URLResponse
         do {
@@ -291,6 +294,9 @@ actor PageImageLoader {
         }
         guard let http = response as? HTTPURLResponse else {
             throw PageImageError.badResponse
+        }
+        if !(200...299).contains(http.statusCode) {
+            logger.error("HTTP \(http.statusCode) for \(url, privacy: .public)")
         }
         guard (200...299).contains(http.statusCode) else {
             switch http.statusCode {
