@@ -18,6 +18,8 @@ struct DokushoApp: App {
         _services = State(initialValue: AppServices(modelContext: container.mainContext))
     }
 
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -29,6 +31,12 @@ struct DokushoApp: App {
                     // Rewire whenever the connection (and thus the manager) changes
                     // so buffered background-session events can flush.
                     appDelegate.downloadManager = services.downloadManager
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // Push any queued read progress as soon as we're active again.
+                    if phase == .active, let syncer = services.progressSyncer {
+                        Task { await syncer.flushPending() }
+                    }
                 }
         }
         .modelContainer(modelContainer)

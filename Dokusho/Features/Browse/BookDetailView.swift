@@ -9,12 +9,22 @@ import KomgaKit
 /// reflects ``DownloadManager`` state live: idle → progress + cancel →
 /// downloaded (with delete) / failed (with retry).
 struct BookDetailView: View {
-    let book: KomgaBook
+    /// The book as passed in from the list. May be stale (e.g. after reading);
+    /// ``refreshedBook`` supersedes it once fetched.
+    private let initialBook: KomgaBook
+
+    init(book: KomgaBook) {
+        initialBook = book
+    }
 
     @Environment(AppServices.self) private var services
     @Environment(DownloadManager.self) private var downloadManager
 
     @State private var downloadActionError: String?
+    /// Fresh copy fetched on appear so read progress reflects recent reading.
+    @State private var refreshedBook: KomgaBook?
+
+    private var book: KomgaBook { refreshedBook ?? initialBook }
 
     private var isSupported: Bool { SupportedMediaProfile.isSupported(book.media.mediaProfile) }
 
@@ -36,6 +46,25 @@ struct BookDetailView: View {
         }
         .navigationTitle(displayTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: initialBook.id) {
+            await refreshBook()
+        }
+        .onAppear {
+            // Re-fetch when returning from the reader so progress is current.
+            Task { await refreshBook() }
+        }
+    }
+
+    /// Fetches the latest book (read progress in particular). Failure keeps the
+    /// last known copy — a stale label beats an error banner here, but it is
+    /// still logged by the client layer.
+    private func refreshBook() async {
+        guard let client = services.client else { return }
+        do {
+            refreshedBook = try await client.book(id: initialBook.id)
+        } catch {
+            // Logged in KomgaClient; keep showing the last known state.
+        }
     }
 
     private var header: some View {

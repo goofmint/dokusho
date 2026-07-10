@@ -16,7 +16,8 @@ struct PdfReaderView: View {
     private let initialPage: Int
 
     @State private var state: PdfReaderState
-    @State private var isHUDVisible = true
+    /// HUD is hidden while reading; a tap shows it.
+    @State private var isHUDVisible = false
 
     /// Persisted reader background choice; shares its key with the Settings
     /// screen and the streaming image reader.

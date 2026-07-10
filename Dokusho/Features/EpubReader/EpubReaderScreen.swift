@@ -11,7 +11,8 @@ struct EpubReaderScreen: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var viewModel: EpubReaderViewModel
-    @State private var isHUDVisible = true
+    /// HUD is hidden while reading; a tap shows it.
+    @State private var isHUDVisible = false
 
     init(
         book: KomgaBook,

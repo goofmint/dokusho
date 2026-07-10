@@ -30,7 +30,8 @@ struct ImageReaderScreen: View {
 
     @State private var progression: ReadingProgression = .leftToRight
     @State private var currentSpreadIndex = 0
-    @State private var hudVisible = true
+    /// HUD (header + page slider) is hidden while reading; a center tap shows it.
+    @State private var hudVisible = false
     @State private var didResolveInitialState = false
 
     /// Persisted background choice; shares its key with the Settings screen.
@@ -134,19 +135,16 @@ struct ImageReaderScreen: View {
     }
 
     private var bottomBar: some View {
-        VStack(spacing: 8) {
-            Text("\(currentPageLabel) / \(pageCount)")
-                .font(.subheadline.monospacedDigit())
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.ultraThinMaterial, in: Capsule())
-
-            // Direction-aware slider: RTL flips so dragging right advances reading.
+        // Direction-aware slider with a compact page label; no standalone footer.
+        HStack(spacing: 12) {
             pageSlider
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            Text("\(currentPageLabel) / \(pageCount)")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
     private var pageSlider: some View {

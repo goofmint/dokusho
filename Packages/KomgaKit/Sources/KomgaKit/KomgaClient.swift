@@ -203,7 +203,10 @@ public struct KomgaClient: Sendable {
             path: "/api/v1/books/\(bookID)/read-progress",
             body: body
         )
-        _ = try await performExpectingNoContent(request)
+        // Setting an absolute page is idempotent, so transient-failure retry
+        // is safe and keeps progress from silently landing in the offline
+        // queue on a proxy blip.
+        _ = try await performExpectingNoContent(request, idempotent: true)
     }
 
     // MARK: - Private helpers
@@ -236,11 +239,13 @@ public struct KomgaClient: Sendable {
 
     /// Executes a request, validating the status code, returning the body data.
     ///
-    /// GET requests are retried (with backoff) on transient failures: HTTP
-    /// 502/503/504 and timeouts. Origins behind proxies (e.g. Cloudflare)
+    /// Idempotent requests are retried (with backoff) on transient failures:
+    /// HTTP 502/503/504 and timeouts. Origins behind proxies (e.g. Cloudflare)
     /// return these sporadically; a blip should not surface as an error screen.
-    private func perform(_ request: URLRequest) async throws -> Data {
-        let isIdempotent = (request.httpMethod ?? "GET") == "GET"
+    /// GETs are idempotent by nature; non-GETs opt in via `idempotent` (e.g.
+    /// the read-progress PATCH, which sets an absolute value).
+    private func perform(_ request: URLRequest, idempotent: Bool? = nil) async throws -> Data {
+        let isIdempotent = idempotent ?? ((request.httpMethod ?? "GET") == "GET")
         var attempt = 0
         while true {
             do {
@@ -311,8 +316,8 @@ public struct KomgaClient: Sendable {
     }
 
     /// Executes a request expecting an empty/ignored body, validating status.
-    private func performExpectingNoContent(_ request: URLRequest) async throws -> Data {
-        try await perform(request)
+    private func performExpectingNoContent(_ request: URLRequest, idempotent: Bool? = nil) async throws -> Data {
+        try await perform(request, idempotent: idempotent)
     }
 
     private static func validate(_ response: URLResponse) throws {
