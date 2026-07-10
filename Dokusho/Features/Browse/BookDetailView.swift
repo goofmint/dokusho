@@ -5,13 +5,16 @@ import KomgaKit
 /// actions. Only ePub/PDF books can be opened; other formats show a
 /// 非対応フォーマット notice.
 ///
-/// The 読む action pushes ``ReaderDestination/book(_:)`` (a placeholder until
-/// Phase 5). The ダウンロード button is a placeholder wired by the Downloads
-/// agent (Phase 6).
+/// The 読む action pushes ``ReaderDestination/book(_:)``. The download row
+/// reflects ``DownloadManager`` state live: idle → progress + cancel →
+/// downloaded (with delete) / failed (with retry).
 struct BookDetailView: View {
     let book: KomgaBook
 
     @Environment(AppServices.self) private var services
+    @Environment(DownloadManager.self) private var downloadManager
+
+    @State private var downloadActionError: String?
 
     private var isSupported: Bool { SupportedMediaProfile.isSupported(book.media.mediaProfile) }
 
@@ -69,16 +72,80 @@ struct BookDetailView: View {
                 .buttonStyle(.borderedProminent)
             }
 
-            // Placeholder: the Downloads agent (Phase 6) replaces this action
-            // with the real DownloadManager call.
-            Button {
-                // Intentionally no-op until Phase 6.
-            } label: {
+            if isSupported {
+                downloadRow
+            }
+
+            if let downloadActionError {
+                Label(downloadActionError, systemImage: "exclamationmark.triangle")
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var downloadRow: some View {
+        switch downloadManager.state(for: book.id) {
+        case .notDownloaded:
+            Button(action: startDownload) {
                 Label("ダウンロード", systemImage: "arrow.down.circle")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
-            .disabled(!isSupported)
+
+        case .downloading(let progress):
+            HStack(spacing: 12) {
+                ProgressView(value: progress)
+                Text(progress.formatted(.percent.precision(.fractionLength(0))))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Button("キャンセル", role: .cancel) {
+                    downloadManager.cancel(bookID: book.id)
+                }
+                .font(.callout)
+            }
+            .padding(.vertical, 6)
+
+        case .downloaded:
+            HStack(spacing: 12) {
+                Label("ダウンロード済み", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Spacer()
+                Button("削除", role: .destructive, action: deleteDownload)
+                    .font(.callout)
+            }
+            .padding(.vertical, 6)
+
+        case .failed(let error):
+            HStack(spacing: 12) {
+                Label("ダウンロード失敗", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                    .help(String(describing: error))
+                Spacer()
+                Button("再試行", action: startDownload)
+                    .font(.callout)
+            }
+            .padding(.vertical, 6)
+        }
+    }
+
+    private func startDownload() {
+        downloadActionError = nil
+        do {
+            try downloadManager.download(book: book)
+        } catch {
+            downloadActionError = "ダウンロードを開始できませんでした: \(error.localizedDescription)"
+        }
+    }
+
+    private func deleteDownload() {
+        downloadActionError = nil
+        do {
+            try downloadManager.delete(bookID: book.id)
+        } catch {
+            downloadActionError = "削除できませんでした: \(error.localizedDescription)"
         }
     }
 
