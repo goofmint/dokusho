@@ -9,8 +9,8 @@ import KomgaKit
 ///
 /// | Profile | Downloaded | Screen |
 /// |---|---|---|
-/// | PDF | yes | `PdfReaderScreen` (integration point) |
-/// | PDF | no  | ``ImageReaderScreen`` (streaming) |
+/// | PDF | yes | ``ImageReaderScreen`` + ``LocalPdfPageSource`` (local rasterizing) |
+/// | PDF | no  | ``ImageReaderScreen`` + ``StreamingPageSource`` (streaming) |
 /// | EPUB | yes | `EpubReaderScreen` (integration point) |
 /// | EPUB | no  | download prompt |
 /// | other | — | unsupported message (should be unreachable) |
@@ -50,16 +50,19 @@ struct ReaderRootView: View {
     @ViewBuilder
     private var pdfReader: some View {
         if let fileURL = services.downloadManager?.localURL(for: book.id) {
-            PdfReaderScreen(
+            // Downloaded: rasterize the local PDF through the image reader, so
+            // spreads / RTL / tap zones behave identically to streaming.
+            LocalPdfImageReader(
                 book: book,
                 fileURL: fileURL,
+                client: services.client,
                 initialPage: effectiveResumePage(),
                 onProgress: recordProgress
             )
         } else if let imageLoader = services.imageLoader, let client = services.client {
             ImageReaderScreen(
                 book: book,
-                imageLoader: imageLoader,
+                source: StreamingPageSource(loader: imageLoader, bookID: book.id),
                 client: client,
                 onProgress: recordProgress
             )
@@ -141,6 +144,96 @@ struct ReaderRootView: View {
             page: page,
             completed: completed
         )
+    }
+}
+
+/// Opens a downloaded PDF exactly once (in `.task`, cached in `@State`, so the
+/// document is not re-parsed on every render) and routes it through the image
+/// reader via ``LocalPdfPageSource``. A file that cannot be opened shows an
+/// explicit Japanese error screen — never a blank view, never a silent fallback.
+private struct LocalPdfImageReader: View {
+    let book: KomgaBook
+    let fileURL: URL
+    let client: KomgaClient?
+    /// Caller-resolved 1-based resume page (local vs. server progress).
+    let initialPage: Int?
+    let onProgress: @MainActor (Int, Bool) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private enum Phase {
+        case opening
+        case ready(LocalPdfPageSource)
+        case failed
+    }
+
+    @State private var phase: Phase = .opening
+
+    var body: some View {
+        content
+            // Pushed via `navigationDestination`; hide the nav/tab bars so no
+            // empty header area pushes the content down. The reader's own HUD
+            // (or the error screen's button) handles dismissal.
+            .navigationBarBackButtonHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
+            .toolbar(.hidden, for: .tabBar)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch phase {
+        case .opening:
+            ProgressView("PDF を開いています…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .task {
+                    if let source = LocalPdfPageSource(fileURL: fileURL) {
+                        phase = .ready(source)
+                    } else {
+                        phase = .failed
+                    }
+                }
+        case let .ready(source):
+            ImageReaderScreen(
+                book: book,
+                source: source,
+                client: client,
+                initialPage: initialPage,
+                onProgress: onProgress
+            )
+        case .failed:
+            LocalPdfErrorView(onClose: { dismiss() })
+        }
+    }
+}
+
+/// Full-screen error state for a local PDF that could not be opened. The user
+/// is told what happened and offered a way out.
+private struct LocalPdfErrorView: View {
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color(.systemBackground).ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.secondary)
+
+                Text("PDFを開けませんでした")
+                    .font(.headline)
+
+                Text("ファイルが見つからないか、破損している可能性があります。ダウンロードし直してからもう一度お試しください。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+
+                Button("閉じる", action: onClose)
+                    .buttonStyle(.borderedProminent)
+                    .padding(.top, 8)
+            }
+        }
     }
 }
 

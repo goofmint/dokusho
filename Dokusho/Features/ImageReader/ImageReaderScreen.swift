@@ -2,10 +2,12 @@ import SwiftUI
 import SwiftData
 import KomgaKit
 
-/// The streaming image reader for un-downloaded **PDF** books.
+/// The image reader for **PDF** books, streaming or downloaded.
 ///
-/// Komga rasterizes PDF pages, so `pages/{n}` serves images the reader pages
-/// through. Page numbers are **1-based** everywhere (Komga convention).
+/// Page bitmaps come from a ``ReaderPageSource``: un-downloaded books stream
+/// Komga-rasterized pages (``StreamingPageSource``), downloaded PDFs are
+/// rasterized locally (``LocalPdfPageSource``). Page numbers are **1-based**
+/// everywhere (Komga convention).
 ///
 /// Composition:
 /// - ``ReaderPagerView`` (UIPageViewController) does the paging, zoom, taps,
@@ -21,8 +23,15 @@ import KomgaKit
 /// local state.
 struct ImageReaderScreen: View {
     let book: KomgaBook
-    let imageLoader: PageImageLoader
-    let client: KomgaClient
+    /// Where page bitmaps come from (streaming API or local PDF rasterizer).
+    let source: any ReaderPageSource
+    /// Used only for the series reading-direction lookup. `nil` (offline,
+    /// downloaded book) falls back to the user's default direction.
+    let client: KomgaClient?
+    /// Caller-resolved 1-based resume page (local vs. server progress). When
+    /// `nil` the screen resolves the resume position itself from
+    /// ``LocalReadingState`` and `book.readProgress` (the streaming behavior).
+    var initialPage: Int? = nil
     /// (1-based page, completed) — reported on each settle for progress sync.
     let onProgress: @MainActor (Int, Bool) -> Void
 
@@ -47,8 +56,13 @@ struct ImageReaderScreen: View {
         ReaderBackground(rawValue: backgroundRaw) ?? .black
     }
 
+    /// The source's own count (a local `PDFDocument`) is authoritative; the
+    /// server-side book metadata is the fallback for streaming.
     private var pageCount: Int {
-        max(book.media.pagesCount, 1)
+        if let sourceCount = source.pageCount {
+            return max(sourceCount, 1)
+        }
+        return max(book.media.pagesCount, 1)
     }
 
     /// Spreads are used in landscape or on regular-width (iPad) layouts.
@@ -69,9 +83,8 @@ struct ImageReaderScreen: View {
 
                 if didResolveInitialState {
                     ReaderPagerView(
-                        bookID: book.id,
                         layout: layout,
-                        imageLoader: imageLoader,
+                        source: source,
                         backgroundColor: background.uiColor,
                         currentSpreadIndex: $currentSpreadIndex,
                         onToggleFullHUD: { toggleFullHUD() },
@@ -270,6 +283,11 @@ struct ImageReaderScreen: View {
     }
 
     private func resolveResumePage(localState: LocalReadingState?) -> Int {
+        // A caller-resolved page (downloaded books, where `book.readProgress`
+        // is a stale snapshot) wins outright.
+        if let initialPage {
+            return min(max(initialPage, 1), pageCount)
+        }
         let serverPage = book.readProgress?.page
         let localPage = localState?.lastPage
         let localNewer: Bool
@@ -297,9 +315,10 @@ struct ImageReaderScreen: View {
         return try? modelContext.fetch(descriptor).first
     }
 
-    /// Fetches the series' reading direction. Returns `nil` when the series
-    /// cannot be fetched (the caller then defaults to LTR).
+    /// Fetches the series' reading direction. Returns `nil` when offline or the
+    /// series cannot be fetched (the caller then falls back to the default).
     private func fetchSeriesDirection() async -> KomgaReadingDirection? {
+        guard let client else { return nil }
         do {
             return try await client.series(id: book.seriesId).metadata.readingDirection
         } catch {

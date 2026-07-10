@@ -6,7 +6,7 @@ import UIKit
 /// Responsibilities:
 /// - Builds one ``ReaderPageViewController`` per ``ReaderSpread`` on demand.
 /// - Reverses gesture/navigation semantics for right-to-left reading.
-/// - Loads page images through the actor ``PageImageLoader`` (1-based pages) and
+/// - Loads page images through a ``ReaderPageSource`` (1-based pages) and
 ///   prefetches ahead (+4) / behind (-1), spread-aware.
 /// - Routes left/right-third taps to page turns and center taps to the full HUD;
 ///   a full-width bottom strip toggles only the progress bar, with priority over
@@ -16,9 +16,9 @@ import UIKit
 /// change in layout (rotation → spread mode) rebuilds the pager while preserving
 /// the reading position.
 struct ReaderPagerView: UIViewControllerRepresentable {
-    let bookID: String
     let layout: ReaderLayout
-    let imageLoader: PageImageLoader
+    /// Where page bitmaps come from (streaming API or local PDF rasterizer).
+    let source: any ReaderPageSource
     let backgroundColor: UIColor
 
     /// The current spread index (reading order). Two-way bound to the parent.
@@ -171,15 +171,14 @@ struct ReaderPagerView: UIViewControllerRepresentable {
         }
 
         /// Loads a single page image (1-based) into a controller, with error
-        /// surfacing. Auto-retry/backoff lives in ``PageImageLoader``; not
-        /// duplicated here.
+        /// surfacing. Retry/caching behavior lives in the ``ReaderPageSource``;
+        /// not duplicated here.
         private func load(page: Int, into controller: ReaderPageViewController) {
             loadTasks[page]?.cancel()
-            let loader = parent.imageLoader
-            let bookID = parent.bookID
+            let source = parent.source
             loadTasks[page] = Task { [weak self, weak controller] in
                 do {
-                    let image = try await loader.image(bookID: bookID, page: page)
+                    let image = try await source.image(page: page)
                     if Task.isCancelled { return }
                     await MainActor.run {
                         controller?.setImage(image, for: page)
@@ -214,10 +213,9 @@ struct ReaderPagerView: UIViewControllerRepresentable {
                 // Only the nearest page behind (design: -1).
                 behindPages = Array(spreads[behind].pages.suffix(1))
             }
-            let bookID = parent.bookID
-            let loader = parent.imageLoader
+            let source = parent.source
             let prefetch = Array((aheadPages.prefix(4)) + behindPages)
-            Task { await loader.prefetch(bookID: bookID, pages: prefetch) }
+            Task { await source.prefetch(pages: prefetch) }
         }
 
         private func cancelAllLoads() {
@@ -227,10 +225,9 @@ struct ReaderPagerView: UIViewControllerRepresentable {
 
         func teardown() {
             cancelAllLoads()
-            let bookID = parent.bookID
-            let loader = parent.imageLoader
+            let source = parent.source
             let allPages = parent.layout.spreads.flatMap(\.pages)
-            Task { await loader.cancelPrefetch(bookID: bookID, pages: allPages) }
+            Task { await source.cancelPrefetch(pages: allPages) }
         }
 
         // MARK: Data source (reversed for RTL)
