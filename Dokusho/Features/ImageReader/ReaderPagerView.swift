@@ -8,7 +8,8 @@ import UIKit
 /// - Reverses gesture/navigation semantics for right-to-left reading.
 /// - Loads page images through the actor ``PageImageLoader`` (1-based pages) and
 ///   prefetches ahead (+4) / behind (-1), spread-aware.
-/// - Routes left/right-third taps to page turns and center taps to the HUD.
+/// - Routes left/right-third taps to page turns and center taps to the HUD; a
+///   full-width bottom strip toggles the HUD with priority over page turns.
 ///
 /// The parent owns the ``ReaderLayout`` and the current spread index binding; a
 /// change in layout (rotation → spread mode) rebuilds the pager while preserving
@@ -273,9 +274,23 @@ struct ReaderPagerView: UIViewControllerRepresentable {
 
         // MARK: Tap zones
 
+        /// Fraction of the view height, measured from the bottom, reserved as a
+        /// full-width HUD-toggle strip. Taps here never turn a page, so tapping
+        /// near the footer reveals the progress HUD instead of flipping a page.
+        private static let bottomStripFraction: CGFloat = 0.2
+
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
             guard let view = pager?.view else { return }
             let location = gesture.location(in: view)
+
+            // Bottom strip (full width) toggles the HUD, taking priority over the
+            // left/right page-turn zones.
+            let bottomStripTop = view.bounds.height * (1 - Self.bottomStripFraction)
+            if location.y >= bottomStripTop {
+                parent.onToggleHUD()
+                return
+            }
+
             let third = view.bounds.width / 3
             if location.x < third {
                 turnPage(towardVisualLeft: true)

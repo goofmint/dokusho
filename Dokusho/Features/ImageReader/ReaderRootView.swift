@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import KomgaKit
 
 /// Entry point for the reader, registered for ``ReaderDestination``.
@@ -21,6 +22,7 @@ struct ReaderRootView: View {
     let book: KomgaBook
 
     @Environment(AppServices.self) private var services
+    @Environment(\.modelContext) private var modelContext
 
     private var profile: String {
         book.media.mediaProfile.uppercased()
@@ -48,7 +50,12 @@ struct ReaderRootView: View {
     @ViewBuilder
     private var pdfReader: some View {
         if let fileURL = services.downloadManager?.localURL(for: book.id) {
-            PdfReaderScreen(book: book, fileURL: fileURL, onProgress: recordProgress)
+            PdfReaderScreen(
+                book: book,
+                fileURL: fileURL,
+                initialPage: effectiveResumePage(),
+                onProgress: recordProgress
+            )
         } else if let imageLoader = services.imageLoader, let client = services.client {
             ImageReaderScreen(
                 book: book,
@@ -66,7 +73,12 @@ struct ReaderRootView: View {
     @ViewBuilder
     private var epubReader: some View {
         if let fileURL = services.downloadManager?.localURL(for: book.id) {
-            EpubReaderScreen(book: book, fileURL: fileURL, onProgress: recordProgress)
+            EpubReaderScreen(
+                book: book,
+                fileURL: fileURL,
+                initialPage: effectiveResumePage(),
+                onProgress: recordProgress
+            )
         } else {
             downloadPrompt
         }
@@ -94,6 +106,31 @@ struct ReaderRootView: View {
             Text("サーバーに接続してから再度お試しください。")
         }
         .navigationTitle("読む")
+    }
+
+    // MARK: - Resume position
+
+    /// Computes the 1-based page a downloaded PDF/ePub reader should resume at.
+    ///
+    /// The `book.readProgress` snapshot is stale (captured at list-fetch time, or
+    /// frozen at download time for books opened from the persisted sidecar), so it
+    /// alone would resume at an old page. ``LocalReadingState`` is written on every
+    /// page turn and is the local source of truth. Prefer it when it is newer than
+    /// the server snapshot (or when there is no server snapshot); otherwise fall
+    /// back to the server page. Returns `nil` when neither source is available, so
+    /// the reader keeps its current book-derived behavior.
+    private func effectiveResumePage() -> Int? {
+        let bookID = book.id
+        let descriptor = FetchDescriptor<LocalReadingState>(
+            predicate: #Predicate { $0.bookID == bookID }
+        )
+        let localState = (try? modelContext.fetch(descriptor))?.first
+
+        if let localState,
+           book.readProgress == nil || localState.updatedAt > (book.readProgress?.readDate ?? .distantPast) {
+            return localState.lastPage
+        }
+        return book.readProgress?.page
     }
 
     // MARK: - Progress

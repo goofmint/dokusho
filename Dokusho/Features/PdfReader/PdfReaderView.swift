@@ -30,6 +30,7 @@ struct PdfReaderView: View {
     init(
         book: KomgaBook,
         document: PDFDocument,
+        initialPage: Int? = nil,
         onProgress: @escaping @MainActor (Int, Bool) -> Void,
         onClose: @escaping () -> Void
     ) {
@@ -38,10 +39,12 @@ struct PdfReaderView: View {
         self.onProgress = onProgress
         self.onClose = onClose
 
-        // Resume position: readProgress.page is 1-based. Clamp to the document's
-        // valid range so a stale/out-of-range value can never crash the reader.
+        // Resume position: prefer the caller-resolved page (local vs. server
+        // progress); otherwise fall back to the book's own `readProgress`. Page
+        // numbers are 1-based. Clamp to the document's valid range so a
+        // stale/out-of-range value can never crash the reader.
         let pageCount = document.pageCount
-        let resume = book.readProgress?.page ?? 1
+        let resume = initialPage ?? book.readProgress?.page ?? 1
         let clamped = min(max(resume, 1), max(pageCount, 1))
         self.initialPage = clamped
 

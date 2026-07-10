@@ -17,15 +17,20 @@ import KomgaKit
 struct PdfReaderScreen: View {
     private let book: KomgaBook
     private let fileURL: URL
+    /// Effective resume page (1-based) resolved by the caller from local vs.
+    /// server progress. `nil` falls back to the book's own `readProgress`.
+    private let initialPage: Int?
     private let onProgress: @MainActor (Int, Bool) -> Void
 
     init(
         book: KomgaBook,
         fileURL: URL,
+        initialPage: Int? = nil,
         onProgress: @escaping @MainActor (Int, Bool) -> Void
     ) {
         self.book = book
         self.fileURL = fileURL
+        self.initialPage = initialPage
         self.onProgress = onProgress
     }
 
@@ -33,6 +38,7 @@ struct PdfReaderScreen: View {
         PdfReaderContentView(
             book: book,
             fileURL: fileURL,
+            initialPage: initialPage,
             onProgress: onProgress
         )
     }
@@ -43,6 +49,7 @@ struct PdfReaderScreen: View {
 /// re-parsing the document on every SwiftUI re-render.
 private struct PdfReaderContentView: View {
     private let book: KomgaBook
+    private let initialPage: Int?
     private let onProgress: @MainActor (Int, Bool) -> Void
 
     /// `nil` means the document could not be opened (missing file / corrupt PDF).
@@ -53,9 +60,11 @@ private struct PdfReaderContentView: View {
     init(
         book: KomgaBook,
         fileURL: URL,
+        initialPage: Int?,
         onProgress: @escaping @MainActor (Int, Bool) -> Void
     ) {
         self.book = book
+        self.initialPage = initialPage
         self.onProgress = onProgress
 
         // Fail fast when the file is missing, so we show the error screen
@@ -73,6 +82,7 @@ private struct PdfReaderContentView: View {
                 PdfReaderView(
                     book: book,
                     document: document,
+                    initialPage: initialPage,
                     onProgress: onProgress,
                     onClose: { dismiss() }
                 )

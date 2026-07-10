@@ -13,16 +13,22 @@ struct EpubReaderScreen: View {
     @State private var viewModel: EpubReaderViewModel
     /// HUD is hidden while reading; a tap shows it.
     @State private var isHUDVisible = false
+    /// スライダーのドラッグ中の値。ドラッグ中はこの値を優先表示し、離した時に移動する。
+    @State private var sliderValue: Double = 0
+    /// スライダーをユーザーがドラッグしているか。
+    @State private var isDraggingSlider = false
 
     init(
         book: KomgaBook,
         fileURL: URL,
+        initialPage: Int? = nil,
         onProgress: @escaping @MainActor (Int, Bool) -> Void
     ) {
         _viewModel = State(
             wrappedValue: EpubReaderViewModel(
                 book: book,
                 fileURL: fileURL,
+                initialPage: initialPage,
                 onProgress: onProgress
             )
         )
@@ -169,13 +175,39 @@ struct EpubReaderScreen: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
-            // スライダーは現在位置の可視化用（読み取り主体）。
-            ProgressView(value: viewModel.totalProgression, total: 1.0)
-                .progressViewStyle(.linear)
+            // ドラッグで現在位置を移動できるスライダー。ドラッグ中は sliderValue を
+            // 優先表示し、離した時に navigator を移動させる。
+            Slider(
+                value: sliderBinding,
+                in: 0...1,
+                onEditingChanged: handleSliderEditingChanged
+            )
+            .accessibilityLabel("読書位置")
+            .accessibilityValue(viewModel.progressPercentText)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(.thinMaterial)
+    }
+
+    /// ドラッグ中は `sliderValue`、それ以外は ViewModel の現在進捗を表示する。
+    private var sliderBinding: Binding<Double> {
+        Binding(
+            get: { isDraggingSlider ? sliderValue : viewModel.totalProgression },
+            set: { sliderValue = $0 }
+        )
+    }
+
+    /// スライダーのドラッグ開始/終了を受けて、終了時に navigator を移動させる。
+    private func handleSliderEditingChanged(_ editing: Bool) {
+        if editing {
+            sliderValue = viewModel.totalProgression
+            isDraggingSlider = true
+        } else {
+            isDraggingSlider = false
+            let target = sliderValue
+            Task { await viewModel.seek(toProgression: target) }
+        }
     }
 
     private func adjustFontSize(by delta: Double) {
