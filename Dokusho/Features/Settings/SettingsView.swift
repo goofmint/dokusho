@@ -30,6 +30,7 @@ struct SettingsView: View {
     @State private var showClearCacheConfirmation = false
 
     @State private var showDisconnectConfirmation = false
+    @State private var showReconnectSheet = false
     @State private var deleteDownloadsOnDisconnect = false
     @State private var deleteCacheOnDisconnect = false
     @State private var disconnectError: String?
@@ -184,10 +185,16 @@ struct SettingsView: View {
                 if let config = serverConfig {
                     LabeledContent("サーバー", value: config.serverName)
                     LabeledContent("URL", value: config.baseURL.absoluteString)
+                    Button("サーバー設定を変更") {
+                        showReconnectSheet = true
+                    }
                 } else {
                     Text("サーバーに接続していません。")
                         .foregroundStyle(.secondary)
                 }
+            }
+            .sheet(isPresented: $showReconnectSheet) {
+                ConnectionView(initialURLText: serverConfig?.baseURL.absoluteString ?? "")
             }
 
             if serverConfig != nil {

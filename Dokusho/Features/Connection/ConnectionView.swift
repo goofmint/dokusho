@@ -8,8 +8,17 @@ import SwiftData
 struct ConnectionView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AppServices.self) private var services
+    @Environment(\.dismiss) private var dismiss
 
-    @State private var viewModel = ConnectionViewModel()
+    @State private var viewModel: ConnectionViewModel
+
+    /// - Parameter initialURLText: Pre-fills the URL field (used when
+    ///   re-configuring from Settings). The API key is never pre-filled.
+    init(initialURLText: String = "") {
+        let viewModel = ConnectionViewModel()
+        viewModel.urlText = initialURLText
+        _viewModel = State(initialValue: viewModel)
+    }
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -62,6 +71,11 @@ struct ConnectionView: View {
     private func submit() {
         Task {
             await viewModel.connect(services: services, modelContext: modelContext)
+            // When shown as a sheet (re-configuration from Settings), close on
+            // success. As the root connection screen this is a harmless no-op.
+            if services.isConnected {
+                dismiss()
+            }
         }
     }
 }
