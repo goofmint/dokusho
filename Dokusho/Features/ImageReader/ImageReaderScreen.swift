@@ -87,6 +87,7 @@ struct ImageReaderScreen: View {
         .statusBarHidden(!hudVisible)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
         .task {
             guard !didResolveInitialState else { return }
             await resolveInitialState()

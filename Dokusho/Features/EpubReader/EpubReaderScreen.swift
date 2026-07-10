@@ -45,6 +45,7 @@ struct EpubReaderScreen: View {
         // handles dismissal. Matches `ImageReaderScreen`.
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
     }
 
     @ViewBuilder

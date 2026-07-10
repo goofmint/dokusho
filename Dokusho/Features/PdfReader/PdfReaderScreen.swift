@@ -81,10 +81,11 @@ private struct PdfReaderContentView: View {
             }
         }
         // Pushed via `navigationDestination`; hide the nav bar so no empty
-        // header area pushes the content down. The HUD's own close button
-        // handles dismissal. Matches `ImageReaderScreen`.
+        // header area pushes the content down, and the tab bar so it doesn't
+        // cover the page bottom. The HUD's own close button handles dismissal.
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
     }
 }
 
