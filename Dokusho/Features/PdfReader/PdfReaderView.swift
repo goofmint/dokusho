@@ -57,14 +57,14 @@ struct PdfReaderView: View {
                 initialPageIndex: initialPage - 1,
                 displaysRTL: state.displaysRTL,
                 requestedPage: $state.requestedPage,
-                onPageChanged: handlePageChanged
+                onPageChanged: handlePageChanged,
+                onTap: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isHUDVisible.toggle()
+                    }
+                }
             )
             .ignoresSafeArea()
-            .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isHUDVisible.toggle()
-                }
-            }
 
             if isHUDVisible {
                 hudOverlay

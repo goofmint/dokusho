@@ -22,9 +22,13 @@ struct PdfKitView: UIViewRepresentable {
     /// 1-based page requested via the slider. Reset to `nil` once applied.
     @Binding var requestedPage: Int?
     let onPageChanged: (Int) -> Void
+    /// Center-tap callback used to toggle the HUD. PDFKit's `PDFView` consumes
+    /// touches, so a UIKit tap recognizer (below) is the reliable path — a
+    /// SwiftUI `.onTapGesture` on the wrapper never fires.
+    let onTap: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onPageChanged: onPageChanged)
+        Coordinator(onPageChanged: onPageChanged, onTap: onTap)
     }
 
     func makeUIView(context: Context) -> PDFView {
@@ -45,6 +49,7 @@ struct PdfKitView: UIViewRepresentable {
         }
 
         context.coordinator.observe(pdfView)
+        context.coordinator.installTapRecognizer(on: pdfView)
         context.coordinator.applySpread(to: pdfView)
 
         return pdfView
@@ -52,7 +57,7 @@ struct PdfKitView: UIViewRepresentable {
 
     func updateUIView(_ pdfView: PDFView, context: Context) {
         if pdfView.displaysRTL != displaysRTL {
-            pdfView.displaysRTL = displaysRTL
+            context.coordinator.applyReadingDirection(displaysRTL, to: pdfView)
         }
 
         // Apply a pending slider jump, if any, without fighting user swipes.
@@ -79,14 +84,19 @@ struct PdfKitView: UIViewRepresentable {
     // MARK: - Coordinator
 
     @MainActor
-    final class Coordinator: NSObject {
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         private let onPageChanged: (Int) -> Void
+        private let onTap: () -> Void
         private weak var pdfView: PDFView?
         private var observer: NSObjectProtocol?
         private var lastReportedPage: Int?
+        /// While `true`, transient `PDFViewPageChanged` notifications fired during
+        /// a reading-direction relayout are ignored so progress isn't corrupted.
+        private var suppressesPageChanges = false
 
-        init(onPageChanged: @escaping (Int) -> Void) {
+        init(onPageChanged: @escaping (Int) -> Void, onTap: @escaping () -> Void) {
             self.onPageChanged = onPageChanged
+            self.onTap = onTap
         }
 
         func observe(_ pdfView: PDFView) {
@@ -99,6 +109,75 @@ struct PdfKitView: UIViewRepresentable {
                 MainActor.assumeIsolated {
                     self?.handlePageChanged()
                 }
+            }
+        }
+
+        /// Installs a single-tap recognizer that toggles the HUD. It runs
+        /// alongside PDFKit's own gestures (swipe paging, pinch zoom, link taps)
+        /// and defers to any internal double-tap recognizer so a zoom double-tap
+        /// is never mistaken for a HUD toggle.
+        func installTapRecognizer(on pdfView: PDFView) {
+            let recognizer = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+            recognizer.numberOfTapsRequired = 1
+            recognizer.delegate = self
+
+            // Require PDFKit's internal double-tap recognizers to fail first, so
+            // our single tap only fires when it is not the start of a double tap.
+            for existing in doubleTapRecognizers(in: pdfView) {
+                recognizer.require(toFail: existing)
+            }
+
+            pdfView.addGestureRecognizer(recognizer)
+        }
+
+        /// Collects `UITapGestureRecognizer`s with `numberOfTapsRequired == 2`
+        /// on the PDFView and its subviews (PDFKit hosts them on the internal
+        /// scroll/content views).
+        private func doubleTapRecognizers(in root: UIView) -> [UITapGestureRecognizer] {
+            var found: [UITapGestureRecognizer] = []
+            var stack: [UIView] = [root]
+            while let view = stack.popLast() {
+                for recognizer in view.gestureRecognizers ?? [] {
+                    if let tap = recognizer as? UITapGestureRecognizer,
+                       tap.numberOfTapsRequired == 2 {
+                        found.append(tap)
+                    }
+                }
+                stack.append(contentsOf: view.subviews)
+            }
+            return found
+        }
+
+        @objc private func handleTap() {
+            onTap()
+        }
+
+        // Run our tap alongside PDFKit's own recognizers rather than blocking them.
+        nonisolated func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
+        }
+
+        /// Re-applies the reading direction and re-lays out the live view.
+        /// PDFKit does not re-layout `usePageViewController(true)` on a bare
+        /// `displaysRTL` change, so the document is reassigned to force it, with
+        /// the current page captured and restored and page-changed notifications
+        /// suppressed across the swap.
+        func applyReadingDirection(_ displaysRTL: Bool, to pdfView: PDFView) {
+            let currentPage = pdfView.currentPage
+            suppressesPageChanges = true
+            defer { suppressesPageChanges = false }
+
+            pdfView.displaysRTL = displaysRTL
+            let document = pdfView.document
+            pdfView.document = nil
+            pdfView.document = document
+            pdfView.usePageViewController(true, withViewOptions: nil)
+
+            if let currentPage {
+                pdfView.go(to: currentPage)
             }
         }
 
@@ -135,6 +214,7 @@ struct PdfKitView: UIViewRepresentable {
         }
 
         private func handlePageChanged() {
+            guard !suppressesPageChanges else { return }
             guard let pdfView,
                   let document = pdfView.document,
                   let current = pdfView.currentPage else { return }

@@ -40,6 +40,11 @@ struct EpubReaderScreen: View {
             viewModel.setColorScheme(dark: newValue == .dark)
         }
         .statusBarHidden(!isHUDVisible)
+        // Pushed via `navigationDestination`; hide the nav bar so no empty
+        // header area pushes the content down. The HUD's own close button
+        // handles dismissal. Matches `ImageReaderScreen`.
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     @ViewBuilder

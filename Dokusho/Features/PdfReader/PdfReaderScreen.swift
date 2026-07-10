@@ -80,6 +80,11 @@ private struct PdfReaderContentView: View {
                 PdfReaderErrorView(onClose: { dismiss() })
             }
         }
+        // Pushed via `navigationDestination`; hide the nav bar so no empty
+        // header area pushes the content down. The HUD's own close button
+        // handles dismissal. Matches `ImageReaderScreen`.
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
