@@ -62,7 +62,7 @@ final class AppServices {
         let serverConfig = try KomgaServerConfig(baseURL: config.baseURL, apiKey: apiKey)
         let newClient = KomgaClient(config: serverConfig)
         client = newClient
-        imageLoader = PageImageLoader(client: newClient)
+        imageLoader = makeImageLoader(client: newClient)
         downloadManager = DownloadManager(client: newClient, modelContext: modelContext)
         activateProgressSyncer(client: newClient)
     }
@@ -70,9 +70,22 @@ final class AppServices {
     /// Activates a verified client after a successful connection.
     func setConnected(client: KomgaClient) {
         self.client = client
-        imageLoader = PageImageLoader(client: client)
+        imageLoader = makeImageLoader(client: client)
         downloadManager = DownloadManager(client: client, modelContext: modelContext)
         activateProgressSyncer(client: client)
+    }
+
+    /// Builds the page/thumbnail loader with the user's persisted cache-limit
+    /// setting applied to the page disk cache.
+    private func makeImageLoader(client: KomgaClient) -> PageImageLoader {
+        PageImageLoader(client: client, diskLimit: CacheLimit.currentBytes())
+    }
+
+    /// Applies a changed cache-limit setting to the live loader without dropping
+    /// the in-memory caches. Safe to call while disconnected (no-op).
+    func applyCacheLimit(_ bytes: Int) {
+        guard let imageLoader else { return }
+        Task { await imageLoader.updateDiskLimit(bytes) }
     }
 
     /// Clears the in-memory client (used on disconnect). Persisted state is

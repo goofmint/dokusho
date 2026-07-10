@@ -142,6 +142,9 @@ final class DownloadManager {
 
         let request = try client.fileDownloadRequest(bookID: book.id)
         upsertRecord(for: book, profile: profile, state: .downloading(progress: 0))
+        // Persist the full book metadata alongside the file so the book can be
+        // opened offline (airplane mode) without re-fetching from the server.
+        persistBookMetadata(book)
 
         let task: URLSessionDownloadTask
         if let data = resumeData.removeValue(forKey: book.id) {
@@ -197,6 +200,17 @@ final class DownloadManager {
         guard let record = record(for: bookID) else { return nil }
         let url = fileURL(for: bookID, profile: record.mediaProfile)
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    /// The decoded ``KomgaBook`` persisted alongside a downloaded book, or `nil`
+    /// when the metadata sidecar (`book.json`) is missing or cannot be decoded.
+    ///
+    /// Enables opening the reader offline without a server round-trip. Returns
+    /// `nil` explicitly (no fallback) so callers can surface a clear message.
+    func localBook(for bookID: String) -> KomgaBook? {
+        let url = bookMetadataURL(for: bookID)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? Self.metadataDecoder.decode(KomgaBook.self, from: data)
     }
 
     /// Total size in bytes of all fully downloaded books.
@@ -457,6 +471,41 @@ final class DownloadManager {
         let ext = profile.uppercased() == "PDF" ? "pdf" : "epub"
         return bookDirectory(for: bookID).appendingPathComponent("book.\(ext)", isDirectory: false)
     }
+
+    /// The metadata sidecar URL, e.g. `.../{bookID}/book.json`. Removed together
+    /// with the book directory on delete and reconciliation.
+    private func bookMetadataURL(for bookID: String) -> URL {
+        bookDirectory(for: bookID).appendingPathComponent("book.json", isDirectory: false)
+    }
+
+    /// Writes the book's full metadata to `book.json` for offline opening.
+    private func persistBookMetadata(_ book: KomgaBook) {
+        let directory = bookDirectory(for: book.id)
+        ensureDirectory(directory, excludeFromBackup: true)
+        let url = bookMetadataURL(for: book.id)
+        do {
+            let data = try Self.metadataEncoder.encode(book)
+            try data.write(to: url, options: .atomic)
+            try excludeFromBackup(url)
+        } catch {
+            logger.error("Failed to persist book metadata for \(book.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Encoder/decoder pair for the `book.json` sidecar. Uses matching `.iso8601`
+    /// date strategies so a persisted book round-trips exactly (see the KomgaKit
+    /// `encodeDecodeBookRoundTrip` test).
+    private static let metadataEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
+
+    private static let metadataDecoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
 
     /// Moves a completed temporary download into its final location.
     private func moveDownloadedFile(from tempURL: URL, bookID: String, profile: String) throws -> URL {

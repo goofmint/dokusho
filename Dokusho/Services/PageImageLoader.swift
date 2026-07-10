@@ -35,8 +35,9 @@ actor PageImageLoader {
     private let client: KomgaClient
     private let session: URLSession
 
-    /// LRU byte budget for the on-disk page cache. Default 1 GB.
-    private let diskLimit: Int
+    /// LRU byte budget for the on-disk page cache. Default 1 GB. Mutable so the
+    /// Settings screen can change it without recreating the loader.
+    private var diskLimit: Int
     /// LRU byte budget for the on-disk thumbnail cache. Default 200 MB.
     private let thumbnailDiskLimit: Int
 
@@ -168,6 +169,15 @@ actor PageImageLoader {
     /// Total bytes currently used by both on-disk caches.
     func diskUsage() -> Int {
         directorySize(pageCacheDirectory) + directorySize(thumbnailCacheDirectory)
+    }
+
+    /// Updates the page disk-cache byte budget (from the Settings screen) and
+    /// immediately evicts down to the new limit if it shrank. The thumbnail
+    /// budget is intentionally left fixed.
+    func updateDiskLimit(_ bytes: Int) {
+        guard bytes > 0 else { return }
+        diskLimit = bytes
+        evictIfNeeded(directory: pageCacheDirectory, limit: diskLimit)
     }
 
     /// Clears both memory and disk caches.

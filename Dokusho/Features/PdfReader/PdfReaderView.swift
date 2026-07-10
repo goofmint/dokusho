@@ -18,6 +18,14 @@ struct PdfReaderView: View {
     @State private var state: PdfReaderState
     @State private var isHUDVisible = true
 
+    /// Persisted reader background choice; shares its key with the Settings
+    /// screen and the streaming image reader.
+    @AppStorage(ReaderBackground.storageKey) private var backgroundRaw = ReaderBackground.defaultValue.rawValue
+
+    private var background: ReaderBackground {
+        ReaderBackground(rawValue: backgroundRaw) ?? ReaderBackground.defaultValue
+    }
+
     init(
         book: KomgaBook,
         document: PDFDocument,
@@ -64,9 +72,14 @@ struct PdfReaderView: View {
         }
         .statusBarHidden(!isHUDVisible)
         .onAppear {
-            // Emit the resume position immediately so the caller's progress state
-            // reflects where the reader actually opened.
+            // Apply the persisted reader background, then emit the resume
+            // position so the caller's progress state reflects where the reader
+            // actually opened.
+            state.backgroundColor = Color(background.uiColor)
             reportProgress(page: initialPage)
+        }
+        .onChange(of: backgroundRaw) { _, _ in
+            state.backgroundColor = Color(background.uiColor)
         }
     }
 

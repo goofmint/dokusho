@@ -1,24 +1,57 @@
 import SwiftUI
 import SwiftData
+import KomgaKit
 
-/// Downloads management screen.
+/// Downloads management screen (top-level section).
 ///
-/// Lists downloaded and in-progress books with size/date, offers swipe-to-delete
-/// and cancel, and shows the total downloaded size in the footer. Tapping a
-/// completed book routes to a reader placeholder (wired in Phase 6.3 / 6.4).
+/// Wraps ``DownloadsList`` in its own `NavigationStack` for use as a tab / sidebar
+/// destination. The list itself is factored out so the Settings screen can push
+/// it without nesting navigation stacks.
+struct DownloadsView: View {
+    var body: some View {
+        NavigationStack {
+            DownloadsList()
+                .navigationTitle("ダウンロード")
+        }
+    }
+}
+
+/// The downloads list content: downloaded and in-progress books with size/date,
+/// swipe-to-delete and cancel, total size in the footer, and offline opening.
+///
+/// Tapping a completed book reads its persisted `book.json` and presents the
+/// reader full-screen; a missing sidecar surfaces an explicit error (no crash).
 ///
 /// Reads ``DownloadManager`` from the environment. The manager is the source of
 /// truth for live state; the `DownloadedBook` records drive the list contents.
-struct DownloadsView: View {
+struct DownloadsList: View {
     @Environment(DownloadManager.self) private var downloadManager
     /// All persisted download records, kept live by SwiftData.
     @Query(sort: \DownloadedBook.title) private var records: [DownloadedBook]
 
+    /// The book whose reader is currently presented full-screen, if any.
+    @State private var readingBook: KomgaBook?
+    /// Set when a tapped record's `book.json` sidecar is missing/unreadable.
+    @State private var metadataError: String?
+
     var body: some View {
-        NavigationStack {
-            content
-                .navigationTitle("ダウンロード")
-        }
+        content
+            .fullScreenCover(item: $readingBook) { book in
+                NavigationStack {
+                    ReaderRootView(book: book)
+                }
+            }
+            .alert(
+                "この本を開けません",
+                isPresented: Binding(
+                    get: { metadataError != nil },
+                    set: { if !$0 { metadataError = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(metadataError ?? "")
+            }
     }
 
     @ViewBuilder
@@ -43,8 +76,9 @@ struct DownloadsView: View {
         }
     }
 
-    /// A downloaded book is tappable (navigates to a reader placeholder that
-    /// Phase 6.3 / 6.4 will replace); in-progress and failed rows are not.
+    /// A downloaded book is tappable and opens the offline reader; in-progress
+    /// and failed rows are not. Opening reads the persisted `book.json` sidecar;
+    /// if it is missing the tap surfaces an explicit error instead of crashing.
     @ViewBuilder
     private func row(for record: DownloadedBook) -> some View {
         let state = downloadManager.state(for: record.bookID)
@@ -54,13 +88,24 @@ struct DownloadsView: View {
             onCancel: { downloadManager.cancel(bookID: record.bookID) }
         )
         if case .downloaded = state {
-            NavigationLink {
-                DownloadedBookReaderPlaceholder(record: record)
+            Button {
+                open(record: record)
             } label: {
                 rowContent
             }
+            .buttonStyle(.plain)
         } else {
             rowContent
+        }
+    }
+
+    /// Resolves the offline book metadata and presents the reader, or surfaces a
+    /// Japanese error when the sidecar is unavailable.
+    private func open(record: DownloadedBook) {
+        if let book = downloadManager.localBook(for: record.bookID) {
+            readingBook = book
+        } else {
+            metadataError = "この本のメタデータ（book.json）が見つかりません。もう一度ダウンロードしてください。"
         }
     }
 
@@ -172,22 +217,6 @@ private struct DownloadRow: View {
 
     private var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: Int64(record.totalBytes), countStyle: .file)
-    }
-}
-
-/// Temporary destination for a downloaded book. The real reader (Readium for
-/// ePub, PDFKit for PDF) is wired in Phase 6.3 / 6.4.
-private struct DownloadedBookReaderPlaceholder: View {
-    let record: DownloadedBook
-
-    var body: some View {
-        ContentUnavailableView(
-            record.title,
-            systemImage: "book",
-            description: Text("リーダーは今後のフェーズで実装されます。")
-        )
-        .navigationTitle(record.title)
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

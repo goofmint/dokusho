@@ -80,6 +80,22 @@ struct DTODecodingTests {
         #expect(book.sizeBytes == 104_857_600)
     }
 
+    @Test("Book round-trips through Codable for offline persistence")
+    func encodeDecodeBookRoundTrip() throws {
+        let original = try decoder.decode(KomgaBook.self, from: Fixture.data("book"))
+
+        // The offline persistence layer uses matching `.iso8601` strategies on a
+        // plain encoder/decoder pair, so mirror that here.
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let roundTripDecoder = JSONDecoder()
+        roundTripDecoder.dateDecodingStrategy = .iso8601
+
+        let data = try encoder.encode(original)
+        let restored = try roundTripDecoder.decode(KomgaBook.self, from: data)
+        #expect(restored == original)
+    }
+
     @Test("Book without read progress decodes readProgress as nil")
     func decodeBooksPageMixedProgress() throws {
         let page = try decoder.decode(

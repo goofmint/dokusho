@@ -220,13 +220,14 @@ struct ImageReaderScreen: View {
     private func resolveInitialState() async {
         let localState = fetchLocalState()
 
-        // Direction: per-book override wins, else series metadata, else LTR.
+        // Direction: per-book override wins, else series metadata, else the
+        // user's default-direction setting (which itself defaults to LTR).
         if let override = ReadingProgression.fromOverride(localState?.readingDirectionOverride) {
             progression = override
         } else if let seriesDirection = await fetchSeriesDirection() {
             progression = ReadingProgression.from(seriesDirection: seriesDirection)
         } else {
-            progression = .leftToRight
+            progression = ReadingProgression(rawValue: ReadingDirectionDefault.current().rawValue) ?? .leftToRight
         }
 
         // Resume position: newer of server progress vs local state.

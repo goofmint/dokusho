@@ -23,7 +23,9 @@ final class PdfReaderState {
     /// intentionally not persisted per book for Task 6.4.
     var displaysRTL: Bool = false
 
-    /// Reader background. Fixed default for now; Settings-driven color is Phase 7.
+    /// Reader background. Driven by the shared `readerBackground` setting: the
+    /// hosting `PdfReaderView` writes this from `@AppStorage` on appear and on
+    /// change, so the PDF reader honors the same choice as the image reader.
     var backgroundColor: Color = Color(.systemBackground)
 
     init(pageCount: Int) {

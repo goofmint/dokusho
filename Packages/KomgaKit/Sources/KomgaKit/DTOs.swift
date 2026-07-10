@@ -122,7 +122,10 @@ public struct KomgaSeriesMetadata: Sendable, Decodable, Equatable {
 // MARK: - Book
 
 /// A Komga book.
-public struct KomgaBook: Sendable, Decodable, Identifiable, Equatable {
+///
+/// `Encodable` is provided (in addition to `Decodable`) so a downloaded book can
+/// be persisted alongside its file as `book.json` for offline reading.
+public struct KomgaBook: Sendable, Codable, Identifiable, Equatable {
     public let id: String
     public let name: String
     public let seriesId: String
@@ -143,7 +146,7 @@ public struct KomgaBook: Sendable, Decodable, Identifiable, Equatable {
 }
 
 /// Media details for a ``KomgaBook``.
-public struct KomgaMedia: Sendable, Decodable, Equatable {
+public struct KomgaMedia: Sendable, Codable, Equatable {
     /// The media profile, e.g. `EPUB`, `PDF`, `DIVINA`.
     public let mediaProfile: String
     /// The container media type, e.g. `application/epub+zip`.
@@ -159,7 +162,7 @@ public struct KomgaMedia: Sendable, Decodable, Equatable {
 }
 
 /// Metadata for a ``KomgaBook``.
-public struct KomgaBookMetadata: Sendable, Decodable, Equatable {
+public struct KomgaBookMetadata: Sendable, Codable, Equatable {
     public let title: String
     public let number: String
     public let summary: String
@@ -171,13 +174,13 @@ public struct KomgaBookMetadata: Sendable, Decodable, Equatable {
 }
 
 /// An author credit within ``KomgaBookMetadata``.
-public struct KomgaAuthor: Sendable, Decodable, Equatable {
+public struct KomgaAuthor: Sendable, Codable, Equatable {
     public let name: String
     public let role: String
 }
 
 /// The current user's read progress for a ``KomgaBook``.
-public struct KomgaReadProgress: Sendable, Decodable, Equatable {
+public struct KomgaReadProgress: Sendable, Codable, Equatable {
     /// The last page read (1-based).
     public let page: Int
     /// Whether the book has been completed.
