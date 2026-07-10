@@ -16,8 +16,9 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if services.isConnected {
+            if services.isConnected, let downloadManager = services.downloadManager {
                 MainView()
+                    .environment(downloadManager)
             } else {
                 ConnectionView()
             }

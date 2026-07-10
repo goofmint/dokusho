@@ -7,15 +7,29 @@ struct DokushoApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     /// Single shared SwiftData container for the whole app.
-    private let modelContainer = PersistenceController.makeContainer()
+    private let modelContainer: ModelContainer
 
     /// Root dependency container injected into the environment.
-    @State private var services = AppServices()
+    @State private var services: AppServices
+
+    init() {
+        let container = PersistenceController.makeContainer()
+        modelContainer = container
+        _services = State(initialValue: AppServices(modelContext: container.mainContext))
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(services)
+                .onAppear {
+                    appDelegate.downloadManager = services.downloadManager
+                }
+                .onChange(of: services.isConnected) {
+                    // Rewire whenever the connection (and thus the manager) changes
+                    // so buffered background-session events can flush.
+                    appDelegate.downloadManager = services.downloadManager
+                }
         }
         .modelContainer(modelContainer)
     }
