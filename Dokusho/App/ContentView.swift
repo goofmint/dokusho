@@ -1,26 +1,43 @@
 import SwiftUI
-import KomgaKit
-import ReadiumNavigator
+import SwiftData
 
-/// Placeholder root view for Phase 1.
+/// Root view. Routes between the connection screen and the main UI based on
+/// whether a usable connection exists.
 ///
-/// Imports `KomgaKit` and `ReadiumNavigator` to prove both dependencies link
-/// into the app target. Real navigation is built in Phase 3.
+/// On appear, if a `ServerConfig` is persisted it tries to restore the client
+/// (loading the API key from the Keychain). If no config exists or the key is
+/// missing, the connection screen is shown full-screen.
 struct ContentView: View {
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "books.vertical")
-                .font(.largeTitle)
-            Text("Dokusho")
-                .font(.title)
-            Text("KomgaKit \(KomgaKitVersion.current)")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .padding()
-    }
-}
+    @Environment(AppServices.self) private var services
+    @Query private var serverConfigs: [ServerConfig]
 
-#Preview {
-    ContentView()
+    @State private var didAttemptRestore = false
+
+    var body: some View {
+        Group {
+            if services.isConnected {
+                MainView()
+            } else {
+                ConnectionView()
+            }
+        }
+        .task {
+            guard !didAttemptRestore else { return }
+            didAttemptRestore = true
+            restoreIfPossible()
+        }
+    }
+
+    /// Attempts to restore a saved connection. A missing/failed key leaves the
+    /// app disconnected (connection screen shown) rather than crashing.
+    private func restoreIfPossible() {
+        guard let config = serverConfigs.first else { return }
+        do {
+            try services.restore(from: config)
+        } catch {
+            // Restoration failed (e.g. Keychain error). Stay disconnected; the
+            // user re-enters credentials on the connection screen.
+            services.clearConnection()
+        }
+    }
 }
