@@ -1,5 +1,6 @@
 import SwiftUI
 import KomgaKit
+import os
 
 /// A full-region error placeholder with a retry action, per design §5.2 (list
 /// screens show a retryable error view in the content area).
@@ -21,8 +22,13 @@ struct ErrorStateView: View {
 
 /// Maps errors into user-facing Japanese messages. ``KomgaError`` cases get
 /// specific guidance; anything else falls back to a generic message.
+/// Every mapped error is also logged so failures are diagnosable from the
+/// console even when the UI only shows a generic message.
 enum ErrorMessage {
+    private static let logger = Logger(subsystem: "jp.moongift.dokusho", category: "UI")
+
     static func text(for error: Error) -> String {
+        logger.error("Content load failed: \(String(describing: error), privacy: .public)")
         switch error {
         case let komga as KomgaError:
             return message(for: komga)

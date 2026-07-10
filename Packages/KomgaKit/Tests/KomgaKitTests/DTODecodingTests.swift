@@ -3,19 +3,14 @@ import Testing
 
 @testable import KomgaKit
 
-/// Uses a decoder matching the client's date strategy so fixtures decode
-/// the same way they would from the live client.
+/// Uses the client's actual date parser so fixtures decode the same way they
+/// would from the live client (no duplicated strategy that can drift).
 private func makeDecoder() -> JSONDecoder {
     let decoder = JSONDecoder()
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    let fallback = ISO8601DateFormatter()
-    fallback.formatOptions = [.withInternetDateTime]
     decoder.dateDecodingStrategy = .custom { decoder in
         let container = try decoder.singleValueContainer()
         let string = try container.decode(String.self)
-        if let date = formatter.date(from: string) { return date }
-        if let date = fallback.date(from: string) { return date }
+        if let date = KomgaDateParser.parse(string) { return date }
         throw DecodingError.dataCorruptedError(
             in: container, debugDescription: "bad date \(string)"
         )
@@ -144,5 +139,51 @@ struct DTODecodingTests {
     func unknownReadingDirection() {
         let direction = KomgaReadingDirection(rawValue: "DIAGONAL")
         #expect(direction == .unknown("DIAGONAL"))
+    }
+}
+
+/// Komga serializes `LocalDateTime` without a timezone and with a
+/// variable-length fraction; the parser must accept all observed shapes.
+@Suite("Komga date parsing")
+struct KomgaDateParserTests {
+    @Test(
+        "Accepted formats",
+        arguments: [
+            "2024-05-31T09:00:00",             // zone-less LocalDateTime (Komga default)
+            "2024-05-31T09:00:00.1",           // short fraction
+            "2024-05-31T09:00:00.123456",      // micro/nano fraction
+            "2024-05-31T09:00:00Z",            // zoned
+            "2024-05-31T09:00:00.123Z",        // zoned with millis
+            "2024-05-31T09:00:00+09:00",       // offset
+        ]
+    )
+    func accepted(string: String) {
+        #expect(KomgaDateParser.parse(string) != nil)
+    }
+
+    @Test("Zone-less values are interpreted as UTC")
+    func zoneLessIsUTC() throws {
+        let zoneLess = try #require(KomgaDateParser.parse("2024-05-31T09:00:00"))
+        let zoned = try #require(KomgaDateParser.parse("2024-05-31T09:00:00Z"))
+        #expect(zoneLess == zoned)
+    }
+
+    @Test("Garbage is rejected")
+    func rejected() {
+        #expect(KomgaDateParser.parse("31/05/2024 09:00") == nil)
+        #expect(KomgaDateParser.parse("") == nil)
+    }
+
+    @Test("Book with zone-less readProgress date decodes via client strategy")
+    func zoneLessReadProgress() async throws {
+        let harness = try MockHarness()
+        let json = try String(decoding: Fixture.data("book"), as: UTF8.self)
+            .replacingOccurrences(
+                of: "\"readDate\": \"2024-06-10T18:22:00.000Z\"",
+                with: "\"readDate\": \"2024-06-10T18:22:00.123456\""
+            )
+        harness.stub { _ in .init(data: Data(json.utf8)) }
+        let book = try await harness.client.book(id: "0BOOK0001")
+        #expect(book.readProgress?.readDate != nil)
     }
 }

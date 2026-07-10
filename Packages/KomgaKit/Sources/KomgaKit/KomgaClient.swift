@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// A typed, stateless client for the Komga v1 API.
 ///
@@ -7,6 +8,8 @@ import Foundation
 /// return a pre-authenticated `URLRequest` for the caller to execute (so that
 /// downloading and caching strategy stays outside this type).
 public struct KomgaClient: Sendable {
+    private static let logger = Logger(subsystem: "jp.moongift.dokusho", category: "KomgaKit")
+
     private let builder: RequestBuilder
     private let session: URLSession
 
@@ -221,6 +224,9 @@ public struct KomgaClient: Sendable {
         do {
             return try Self.decoder.decode(T.self, from: data)
         } catch {
+            Self.logger.error(
+                "Decoding failed for \(path, privacy: .public): \(String(describing: error), privacy: .public)"
+            )
             throw KomgaError.decoding(error)
         }
     }
@@ -254,27 +260,21 @@ public struct KomgaClient: Sendable {
         }
     }
 
-    /// A shared decoder configured for Komga's ISO-8601 date-time format,
-    /// which includes fractional seconds.
+    /// A shared decoder for Komga's date-time formats. Komga serializes
+    /// `LocalDateTime` **without** a timezone designator (e.g.
+    /// `2024-05-31T09:00:00` or with a variable-length fraction); such values
+    /// are interpreted as UTC. Zone-suffixed ISO-8601 values are also accepted.
     private static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let string = try container.decode(String.self)
-            // ISO8601DateFormatter is not Sendable; create per call to stay
-            // strict-concurrency clean under the @Sendable custom strategy.
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = formatter.date(from: string) {
-                return date
-            }
-            formatter.formatOptions = [.withInternetDateTime]
-            if let date = formatter.date(from: string) {
+            if let date = KomgaDateParser.parse(string) {
                 return date
             }
             throw DecodingError.dataCorruptedError(
                 in: container,
-                debugDescription: "Invalid ISO-8601 date: \(string)"
+                debugDescription: "Unrecognized Komga date: \(string)"
             )
         }
         return decoder
