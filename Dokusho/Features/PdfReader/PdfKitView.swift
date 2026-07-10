@@ -6,11 +6,13 @@ import PDFKit
 /// PDFKit configuration:
 /// - `usePageViewController(true, …)`: swipe-based paging without the page-curl
 ///   animation, giving a book-like feel with native gesture handling.
-/// - `.twoUp` (spread / 見開き) when the view is landscape **or** the horizontal
-///   size class is regular (iPad, design.md §2.3); `.singlePage` otherwise.
-///   `displaysAsBook = true` keeps the cover standalone so pairs are
-///   (2,3),(4,5)…, matching the image reader. Switching is done live on
-///   trait/bounds changes.
+/// - Two-page spreads (見開き) when the view is landscape **or** the horizontal
+///   size class is regular (iPad, design.md §2.3); single page otherwise.
+///   While the page view controller is active, `PDFView` ignores
+///   `displayMode = .twoUp` — spreads must be requested via the PVC's
+///   `spineLocation = .mid` view option instead. `displaysAsBook = true` keeps
+///   the cover standalone so pairs are (2,3),(4,5)…, matching the image
+///   reader. Switching is done live on trait/bounds changes.
 /// - `autoScales = true` with `minScaleFactor`/`maxScaleFactor` so native pinch
 ///   zoom works within sensible bounds. The fit scale is recomputed on every
 ///   bounds change (initial layout, rotation, split view) because the value
@@ -114,6 +116,12 @@ struct PdfKitView: UIViewRepresentable {
         /// callbacks with unchanged bounds are ignored (cheap early-out, and it
         /// stops the relayout a mode switch itself triggers from recursing).
         private var lastLayoutBounds: CGRect = .zero
+        /// Whether the page view controller is currently configured for
+        /// two-page spreads (spine at `.mid`). Tracked here because re-invoking
+        /// `usePageViewController` recreates the PVC — expensive and it resets
+        /// gesture state — so it must only happen on an actual mode change.
+        /// Starts `false`: `makeUIView` installs the PVC with nil options.
+        private var spreadEnabled = false
 
         init(onPageChanged: @escaping (Int) -> Void, onTap: @escaping (CGFloat) -> Void) {
             self.onPageChanged = onPageChanged
@@ -193,7 +201,9 @@ struct PdfKitView: UIViewRepresentable {
         /// PDFKit does not re-layout `usePageViewController(true)` on a bare
         /// `displaysRTL` change, so the document is reassigned to force it, with
         /// the current page captured and restored and page-changed notifications
-        /// suppressed across the swap.
+        /// suppressed across the swap. The PVC is recreated with the **current**
+        /// spine options — passing nil here would silently drop an active
+        /// two-page spread on every direction toggle.
         func applyReadingDirection(_ displaysRTL: Bool, to pdfView: PDFView) {
             let currentPage = pdfView.currentPage
             suppressesPageChanges = true
@@ -203,7 +213,10 @@ struct PdfKitView: UIViewRepresentable {
             let document = pdfView.document
             pdfView.document = nil
             pdfView.document = document
-            pdfView.usePageViewController(true, withViewOptions: nil)
+            pdfView.usePageViewController(
+                true,
+                withViewOptions: Self.pageViewControllerOptions(spread: spreadEnabled)
+            )
 
             if let currentPage {
                 pdfView.go(to: currentPage)
@@ -233,30 +246,50 @@ struct PdfKitView: UIViewRepresentable {
             refreshFitScale(of: pdfView)
         }
 
-        /// Switch between `.singlePage` and `.twoUp` (spread / 見開き). Spreads are
-        /// used when the view is landscape **or** the horizontal size class is
-        /// regular (iPad), matching the image reader (design.md §2.3). The cover
-        /// stays standalone via `displaysAsBook`, the current page is preserved,
-        /// and transient page-change notifications are suppressed across the
-        /// switch (same pattern as the reading-direction relayout).
+        /// Switch between single-page and two-page spread (見開き) display.
+        /// Spreads are used when the view is landscape **or** the horizontal
+        /// size class is regular (iPad), matching the image reader
+        /// (design.md §2.3).
+        ///
+        /// With `usePageViewController(true)` active, `PDFView` ignores
+        /// `displayMode` — the page view controller owns pagination, so spreads
+        /// are requested by recreating it with `spineLocation = .mid` (two
+        /// pages side by side); nil options mean single page. The cover stays
+        /// standalone via `displaysAsBook`, the current page is preserved, and
+        /// transient page-change notifications are suppressed across the switch
+        /// (same pattern as the reading-direction relayout).
         func applySpread(to pdfView: PDFView) {
             let isLandscape = pdfView.bounds.width > pdfView.bounds.height
             let isRegularWidth = pdfView.traitCollection.horizontalSizeClass == .regular
-            let desired: PDFDisplayMode = (isLandscape || isRegularWidth) ? .twoUp : .singlePage
-            guard pdfView.displayMode != desired else { return }
+            let wantsSpread = isLandscape || isRegularWidth
+            guard wantsSpread != spreadEnabled else { return }
+            spreadEnabled = wantsSpread
 
             suppressesPageChanges = true
             defer { suppressesPageChanges = false }
 
             let current = pdfView.currentPage
-            pdfView.displayMode = desired
+            pdfView.usePageViewController(
+                true,
+                withViewOptions: Self.pageViewControllerOptions(spread: wantsSpread)
+            )
             // Book layout: page 1 (cover) alone, then pairs (2,3),(4,5)… —
             // consistent with the image reader's spread rules.
-            pdfView.displaysAsBook = desired == .twoUp
+            pdfView.displaysAsBook = wantsSpread
             if let current {
                 pdfView.go(to: current)
             }
             refreshFitScale(of: pdfView)
+        }
+
+        /// View options for `usePageViewController`: spine at `.mid` shows two
+        /// pages side by side (spread); nil shows a single page.
+        private static func pageViewControllerOptions(spread: Bool) -> [String: NSNumber]? {
+            guard spread else { return nil }
+            return [
+                UIPageViewController.OptionsKey.spineLocation.rawValue:
+                    NSNumber(value: UIPageViewController.SpineLocation.mid.rawValue)
+            ]
         }
 
         /// Recomputes the size-to-fit scale for the current bounds/display mode.
