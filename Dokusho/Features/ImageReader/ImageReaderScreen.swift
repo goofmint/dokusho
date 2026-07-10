@@ -11,7 +11,9 @@ import KomgaKit
 /// - ``ReaderPagerView`` (UIPageViewController) does the paging, zoom, taps,
 ///   image loading and prefetch.
 /// - A HUD overlays a page slider, page label, reading-direction toggle and
-///   close button; the center tap zone toggles it.
+///   close button. The header (top bar) and progress bar (bottom bar) are
+///   toggled independently: a center tap shows/hides both, a bottom-strip tap
+///   toggles only the progress bar.
 ///
 /// Reading direction is resolved once on appear: a per-book override in
 /// ``LocalReadingState`` wins; otherwise the series metadata's direction; else
@@ -30,8 +32,12 @@ struct ImageReaderScreen: View {
 
     @State private var progression: ReadingProgression = .leftToRight
     @State private var currentSpreadIndex = 0
-    /// HUD (header + page slider) is hidden while reading; a center tap shows it.
-    @State private var hudVisible = false
+    /// Header (top bar) visibility. Toggled together with the progress bar by a
+    /// center tap; the bottom-strip tap never touches it.
+    @State private var headerVisible = false
+    /// Progress bar (bottom slider) visibility. Toggled independently by a
+    /// bottom-strip tap, and together with the header by a center tap.
+    @State private var progressVisible = false
     @State private var didResolveInitialState = false
 
     /// Persisted background choice; shares its key with the Settings screen.
@@ -68,23 +74,21 @@ struct ImageReaderScreen: View {
                         imageLoader: imageLoader,
                         backgroundColor: background.uiColor,
                         currentSpreadIndex: $currentSpreadIndex,
-                        onToggleHUD: { withAnimation { hudVisible.toggle() } },
+                        onToggleFullHUD: { toggleFullHUD() },
+                        onToggleProgress: { toggleProgress() },
                         onSettle: handleSettle
                     )
                     .ignoresSafeArea()
                 }
 
-                if hudVisible {
-                    hudOverlay
-                        .transition(.opacity)
-                }
+                hudOverlay
             }
             .onAppear { isLandscape = proxy.size.width > proxy.size.height }
             .onChange(of: proxy.size) { _, newValue in
                 isLandscape = newValue.width > newValue.height
             }
         }
-        .statusBarHidden(!hudVisible)
+        .statusBarHidden(!headerVisible)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
@@ -96,11 +100,22 @@ struct ImageReaderScreen: View {
 
     // MARK: - HUD
 
+    /// Overlays the header and progress bar independently. Only the bars
+    /// themselves hit-test; the transparent gap between them passes taps through
+    /// to the pager so a center tap always reaches ``ReaderPagerView`` and can
+    /// hide the HUD.
     private var hudOverlay: some View {
         VStack {
-            topBar
+            if headerVisible {
+                topBar
+                    .transition(.opacity)
+            }
             Spacer()
-            bottomBar
+                .allowsHitTesting(false)
+            if progressVisible {
+                bottomBar
+                    .transition(.opacity)
+            }
         }
         .padding()
     }
@@ -178,6 +193,24 @@ struct ImageReaderScreen: View {
 
     private var bookTitle: String {
         book.metadata.title.isEmpty ? book.name : book.metadata.title
+    }
+
+    // MARK: - HUD toggling
+
+    /// Center tap: if either bar is visible, hide both; otherwise show both.
+    private func toggleFullHUD() {
+        let anyVisible = headerVisible || progressVisible
+        withAnimation(.easeInOut(duration: 0.2)) {
+            headerVisible = !anyVisible
+            progressVisible = !anyVisible
+        }
+    }
+
+    /// Bottom-strip tap: toggle only the progress bar; leave the header as-is.
+    private func toggleProgress() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            progressVisible.toggle()
+        }
     }
 
     // MARK: - Settle / progress

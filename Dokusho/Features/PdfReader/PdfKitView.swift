@@ -22,10 +22,12 @@ struct PdfKitView: UIViewRepresentable {
     /// 1-based page requested via the slider. Reset to `nil` once applied.
     @Binding var requestedPage: Int?
     let onPageChanged: (Int) -> Void
-    /// Center-tap callback used to toggle the HUD. PDFKit's `PDFView` consumes
-    /// touches, so a UIKit tap recognizer (below) is the reliable path — a
-    /// SwiftUI `.onTapGesture` on the wrapper never fires.
-    let onTap: () -> Void
+    /// Tap callback used to toggle the HUD. Reports the tap's vertical position
+    /// as a fraction of the view height (0 = top, 1 = bottom) so the caller can
+    /// distinguish a bottom-strip tap from a center tap. PDFKit's `PDFView`
+    /// consumes touches, so a UIKit tap recognizer (below) is the reliable
+    /// path — a SwiftUI `.onTapGesture` on the wrapper never fires.
+    let onTap: (_ verticalFraction: CGFloat) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onPageChanged: onPageChanged, onTap: onTap)
@@ -86,7 +88,7 @@ struct PdfKitView: UIViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         private let onPageChanged: (Int) -> Void
-        private let onTap: () -> Void
+        private let onTap: (CGFloat) -> Void
         private weak var pdfView: PDFView?
         private var observer: NSObjectProtocol?
         private var lastReportedPage: Int?
@@ -94,7 +96,7 @@ struct PdfKitView: UIViewRepresentable {
         /// a reading-direction relayout are ignored so progress isn't corrupted.
         private var suppressesPageChanges = false
 
-        init(onPageChanged: @escaping (Int) -> Void, onTap: @escaping () -> Void) {
+        init(onPageChanged: @escaping (Int) -> Void, onTap: @escaping (CGFloat) -> Void) {
             self.onPageChanged = onPageChanged
             self.onTap = onTap
         }
@@ -117,7 +119,7 @@ struct PdfKitView: UIViewRepresentable {
         /// and defers to any internal double-tap recognizer so a zoom double-tap
         /// is never mistaken for a HUD toggle.
         func installTapRecognizer(on pdfView: PDFView) {
-            let recognizer = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+            let recognizer = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
             recognizer.numberOfTapsRequired = 1
             recognizer.delegate = self
 
@@ -148,8 +150,16 @@ struct PdfKitView: UIViewRepresentable {
             return found
         }
 
-        @objc private func handleTap() {
-            onTap()
+        @objc private func handleTap(_ recognizer: UITapGestureRecognizer) {
+            guard let pdfView else { return }
+            let height = pdfView.bounds.height
+            guard height > 0 else {
+                onTap(0)
+                return
+            }
+            let location = recognizer.location(in: pdfView)
+            let fraction = min(max(location.y / height, 0), 1)
+            onTap(fraction)
         }
 
         // Run our tap alongside PDFKit's own recognizers rather than blocking them.

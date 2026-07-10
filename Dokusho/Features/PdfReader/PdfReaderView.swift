@@ -16,8 +16,16 @@ struct PdfReaderView: View {
     private let initialPage: Int
 
     @State private var state: PdfReaderState
-    /// HUD is hidden while reading; a tap shows it.
-    @State private var isHUDVisible = false
+    /// Header (top bar) visibility. A center tap toggles it together with the
+    /// progress bar; a bottom-strip tap never touches it.
+    @State private var headerVisible = false
+    /// Progress bar (bottom bar) visibility. A bottom-strip tap toggles it
+    /// independently; a center tap toggles it together with the header.
+    @State private var progressVisible = false
+
+    /// Fraction of the view height, from the bottom, treated as the
+    /// progress-toggle strip. Matches the image reader.
+    private static let bottomStripFraction: CGFloat = 0.2
 
     /// Persisted reader background choice; shares its key with the Settings
     /// screen and the streaming image reader.
@@ -61,20 +69,13 @@ struct PdfReaderView: View {
                 displaysRTL: state.displaysRTL,
                 requestedPage: $state.requestedPage,
                 onPageChanged: handlePageChanged,
-                onTap: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isHUDVisible.toggle()
-                    }
-                }
+                onTap: handleTap
             )
             .ignoresSafeArea()
 
-            if isHUDVisible {
-                hudOverlay
-                    .transition(.opacity)
-            }
+            hudOverlay
         }
-        .statusBarHidden(!isHUDVisible)
+        .statusBarHidden(!headerVisible)
         .onAppear {
             // Apply the persisted reader background, then emit the resume
             // position so the caller's progress state reflects where the reader
@@ -89,11 +90,21 @@ struct PdfReaderView: View {
 
     // MARK: - HUD
 
+    /// Header and progress bar overlay independently. Only the bars hit-test;
+    /// the transparent gap between them passes taps through to the `PDFView`'s
+    /// tap recognizer so a center tap always reaches ``handleTap``.
     private var hudOverlay: some View {
         VStack(spacing: 0) {
-            topBar
+            if headerVisible {
+                topBar
+                    .transition(.opacity)
+            }
             Spacer()
-            bottomBar
+                .allowsHitTesting(false)
+            if progressVisible {
+                bottomBar
+                    .transition(.opacity)
+            }
         }
     }
 
@@ -160,6 +171,24 @@ struct PdfReaderView: View {
                 state.requestedPage = Int(newValue.rounded())
             }
         )
+    }
+
+    // MARK: - Tap handling
+
+    /// Routes a tap by its vertical position: the bottom strip toggles only the
+    /// progress bar; anywhere above toggles the full HUD (header + progress).
+    private func handleTap(verticalFraction: CGFloat) {
+        if verticalFraction >= 1 - Self.bottomStripFraction {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                progressVisible.toggle()
+            }
+        } else {
+            let anyVisible = headerVisible || progressVisible
+            withAnimation(.easeInOut(duration: 0.2)) {
+                headerVisible = !anyVisible
+                progressVisible = !anyVisible
+            }
+        }
     }
 
     // MARK: - Progress

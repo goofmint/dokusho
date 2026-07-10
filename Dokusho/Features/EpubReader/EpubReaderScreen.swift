@@ -11,8 +11,12 @@ struct EpubReaderScreen: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var viewModel: EpubReaderViewModel
-    /// HUD is hidden while reading; a tap shows it.
-    @State private var isHUDVisible = false
+    /// Header (top bar) visibility. A center tap toggles it together with the
+    /// progress bar; a bottom-strip tap never touches it.
+    @State private var headerVisible = false
+    /// Progress bar (bottom bar) visibility. A bottom-strip tap toggles it
+    /// independently; a center tap toggles it together with the header.
+    @State private var progressVisible = false
     /// スライダーのドラッグ中の値。ドラッグ中はこの値を優先表示し、離した時に移動する。
     @State private var sliderValue: Double = 0
     /// スライダーをユーザーがドラッグしているか。
@@ -45,7 +49,7 @@ struct EpubReaderScreen: View {
         .onChange(of: colorScheme) { _, newValue in
             viewModel.setColorScheme(dark: newValue == .dark)
         }
-        .statusBarHidden(!isHUDVisible)
+        .statusBarHidden(!headerVisible)
         // Pushed via `navigationDestination`; hide the nav bar so no empty
         // header area pushes the content down. The HUD's own close button
         // handles dismissal. Matches `ImageReaderScreen`.
@@ -78,37 +82,66 @@ struct EpubReaderScreen: View {
     }
 
     private func readerView(navigator: EPUBNavigatorViewController) -> some View {
-        ZStack {
-            EpubNavigatorView(
-                navigator: navigator,
-                onLocationChange: { locator in
-                    viewModel.handleLocationChange(locator)
-                },
-                onError: { error in
-                    viewModel.handleNavigatorError(error)
+        GeometryReader { proxy in
+            ZStack {
+                EpubNavigatorView(
+                    navigator: navigator,
+                    onLocationChange: { locator in
+                        viewModel.handleLocationChange(locator)
+                    },
+                    onError: { error in
+                        viewModel.handleNavigatorError(error)
+                    }
+                )
+                .ignoresSafeArea()
+                .onTapGesture(coordinateSpace: .local) { location in
+                    handleTap(at: location, containerHeight: proxy.size.height)
                 }
-            )
-            .ignoresSafeArea()
-            .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isHUDVisible.toggle()
-                }
-            }
 
-            if isHUDVisible {
                 hudOverlay
-                    .transition(.opacity)
+            }
+        }
+    }
+
+    /// Fraction of the view height, from the bottom, treated as the
+    /// progress-toggle strip. Matches the image and PDF readers.
+    private static let bottomStripFraction: CGFloat = 0.2
+
+    /// Routes a tap by its vertical position: the bottom strip toggles only the
+    /// progress bar; anywhere above toggles the full HUD (header + progress).
+    private func handleTap(at location: CGPoint, containerHeight: CGFloat) {
+        let inBottomStrip = containerHeight > 0
+            && location.y >= containerHeight * (1 - Self.bottomStripFraction)
+        if inBottomStrip {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                progressVisible.toggle()
+            }
+        } else {
+            let anyVisible = headerVisible || progressVisible
+            withAnimation(.easeInOut(duration: 0.2)) {
+                headerVisible = !anyVisible
+                progressVisible = !anyVisible
             }
         }
     }
 
     // MARK: - HUD
 
+    /// Header and progress bar overlay independently. Only the bars hit-test;
+    /// the transparent gap between them passes taps through to the navigator so a
+    /// center tap always reaches ``handleTap(at:containerHeight:)``.
     private var hudOverlay: some View {
         VStack(spacing: 0) {
-            topBar
+            if headerVisible {
+                topBar
+                    .transition(.opacity)
+            }
             Spacer()
-            bottomBar
+                .allowsHitTesting(false)
+            if progressVisible {
+                bottomBar
+                    .transition(.opacity)
+            }
         }
     }
 

@@ -8,8 +8,9 @@ import UIKit
 /// - Reverses gesture/navigation semantics for right-to-left reading.
 /// - Loads page images through the actor ``PageImageLoader`` (1-based pages) and
 ///   prefetches ahead (+4) / behind (-1), spread-aware.
-/// - Routes left/right-third taps to page turns and center taps to the HUD; a
-///   full-width bottom strip toggles the HUD with priority over page turns.
+/// - Routes left/right-third taps to page turns and center taps to the full HUD;
+///   a full-width bottom strip toggles only the progress bar, with priority over
+///   page turns.
 ///
 /// The parent owns the ``ReaderLayout`` and the current spread index binding; a
 /// change in layout (rotation → spread mode) rebuilds the pager while preserving
@@ -23,8 +24,12 @@ struct ReaderPagerView: UIViewControllerRepresentable {
     /// The current spread index (reading order). Two-way bound to the parent.
     @Binding var currentSpreadIndex: Int
 
-    /// Called when the center third is tapped (toggle HUD).
-    let onToggleHUD: () -> Void
+    /// Called when the center third (above the bottom strip) is tapped: toggles
+    /// the full HUD (header + progress bar together).
+    let onToggleFullHUD: () -> Void
+    /// Called when the full-width bottom strip is tapped: toggles only the
+    /// progress bar, leaving the header as-is.
+    let onToggleProgress: () -> Void
     /// Called when a spread settles, with its reading-order first page and
     /// whether it is the last spread (book completed).
     let onSettle: (_ firstPage: Int, _ isLast: Bool) -> Void
@@ -44,7 +49,8 @@ struct ReaderPagerView: UIViewControllerRepresentable {
         pager.view.backgroundColor = backgroundColor
         context.coordinator.pager = pager
 
-        // Tap zones: left/right thirds turn pages, center toggles HUD.
+        // Tap zones: left/right thirds turn pages, center toggles the full HUD,
+        // bottom strip toggles the progress bar.
         let tap = UITapGestureRecognizer(
             target: context.coordinator,
             action: #selector(Coordinator.handleTap(_:))
@@ -275,19 +281,20 @@ struct ReaderPagerView: UIViewControllerRepresentable {
         // MARK: Tap zones
 
         /// Fraction of the view height, measured from the bottom, reserved as a
-        /// full-width HUD-toggle strip. Taps here never turn a page, so tapping
-        /// near the footer reveals the progress HUD instead of flipping a page.
+        /// full-width progress-toggle strip. Taps here never turn a page, so
+        /// tapping near the footer reveals the progress bar instead of flipping a
+        /// page or touching the header.
         private static let bottomStripFraction: CGFloat = 0.2
 
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
             guard let view = pager?.view else { return }
             let location = gesture.location(in: view)
 
-            // Bottom strip (full width) toggles the HUD, taking priority over the
-            // left/right page-turn zones.
+            // Bottom strip (full width) toggles only the progress bar, taking
+            // priority over the left/right page-turn zones.
             let bottomStripTop = view.bounds.height * (1 - Self.bottomStripFraction)
             if location.y >= bottomStripTop {
-                parent.onToggleHUD()
+                parent.onToggleProgress()
                 return
             }
 
@@ -297,7 +304,8 @@ struct ReaderPagerView: UIViewControllerRepresentable {
             } else if location.x > third * 2 {
                 turnPage(towardVisualLeft: false)
             } else {
-                parent.onToggleHUD()
+                // Center third above the bottom strip: toggle the full HUD.
+                parent.onToggleFullHUD()
             }
         }
 
