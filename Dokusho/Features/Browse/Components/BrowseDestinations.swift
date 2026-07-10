@@ -17,7 +17,7 @@ struct BrowseDestinationsModifier: ViewModifier {
             .navigationDestination(for: ReaderDestination.self) { destination in
                 switch destination {
                 case let .book(book):
-                    ReaderPlaceholderView(book: book)
+                    ReaderRootView(book: book)
                 }
             }
     }

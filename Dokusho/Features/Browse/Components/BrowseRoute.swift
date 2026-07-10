@@ -41,12 +41,11 @@ enum BrowseRoute: Hashable {
 
 /// Navigation destination for the reader, opened from a book detail's 読む action.
 ///
-/// The reader itself is implemented in Phase 5; this app currently pushes a
-/// placeholder screen for these values. **Phase 5 note:** replace
-/// `ReaderPlaceholderView` (see `ReaderDestination+View`) with the real reader,
-/// keeping this enum's shape. `book` carries the full ``KomgaBook`` so the
-/// reader has the media profile, page count, series id, and read progress it
-/// needs without an extra fetch.
+/// The reader is implemented in Phase 5: these values push ``ReaderRootView``,
+/// which dispatches to the streaming image reader / ePub / PDF reader by media
+/// profile. `book` carries the full ``KomgaBook`` so the reader has the media
+/// profile, page count, series id, and read progress it needs without an extra
+/// fetch.
 enum ReaderDestination: Hashable {
     /// Open the reader for the given book.
     case book(KomgaBook)

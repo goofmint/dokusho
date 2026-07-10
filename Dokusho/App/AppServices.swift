@@ -30,6 +30,11 @@ final class AppServices {
     /// client so background requests always carry current credentials.
     private(set) var downloadManager: DownloadManager?
 
+    /// Read-progress syncer, valid while connected. Recreated with the client so
+    /// it PATCHes progress with current credentials; flushes its offline queue on
+    /// connect and on network restore.
+    private(set) var progressSyncer: ReadProgressSyncer?
+
     /// Shared SwiftData context used by services that persist state.
     private let modelContext: ModelContext
 
@@ -51,6 +56,7 @@ final class AppServices {
             client = nil
             imageLoader = nil
             downloadManager = nil
+            progressSyncer = nil
             return
         }
         let serverConfig = try KomgaServerConfig(baseURL: config.baseURL, apiKey: apiKey)
@@ -58,6 +64,7 @@ final class AppServices {
         client = newClient
         imageLoader = PageImageLoader(client: newClient)
         downloadManager = DownloadManager(client: newClient, modelContext: modelContext)
+        activateProgressSyncer(client: newClient)
     }
 
     /// Activates a verified client after a successful connection.
@@ -65,6 +72,7 @@ final class AppServices {
         self.client = client
         imageLoader = PageImageLoader(client: client)
         downloadManager = DownloadManager(client: client, modelContext: modelContext)
+        activateProgressSyncer(client: client)
     }
 
     /// Clears the in-memory client (used on disconnect). Persisted state is
@@ -73,5 +81,14 @@ final class AppServices {
         client = nil
         imageLoader = nil
         downloadManager = nil
+        progressSyncer = nil
+    }
+
+    /// Builds the syncer for the given client and flushes any queued progress
+    /// left over from a previous (possibly offline) session.
+    private func activateProgressSyncer(client: KomgaClient) {
+        let syncer = ReadProgressSyncer(client: client, modelContext: modelContext)
+        progressSyncer = syncer
+        Task { await syncer.flushPending() }
     }
 }
