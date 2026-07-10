@@ -22,7 +22,10 @@ let package = Package(
         ),
         .testTarget(
             name: "KomgaKitTests",
-            dependencies: ["KomgaKit"]
+            dependencies: ["KomgaKit"],
+            resources: [
+                .copy("Fixtures"),
+            ]
         ),
     ]
 )

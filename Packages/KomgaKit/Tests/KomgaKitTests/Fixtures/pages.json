@@ -1,0 +1,17 @@
+[
+  {
+    "number": 1,
+    "fileName": "0001.jpg",
+    "mediaType": "image/jpeg",
+    "width": 1200,
+    "height": 1800,
+    "size": "512 KiB",
+    "sizeBytes": 524288
+  },
+  {
+    "number": 2,
+    "fileName": "0002.webp",
+    "mediaType": "image/webp",
+    "size": "480 KiB"
+  }
+]

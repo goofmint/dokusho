@@ -1,0 +1,10 @@
+{
+  "id": "0ABCUSER01",
+  "email": "reader@example.com",
+  "roles": ["USER", "FILE_DOWNLOAD", "PAGE_STREAMING"],
+  "sharedAllLibraries": true,
+  "sharedLibrariesIds": [],
+  "labelsAllow": [],
+  "labelsExclude": [],
+  "ageRestriction": null
+}
