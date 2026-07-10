@@ -1,6 +1,10 @@
 import SwiftUI
 import Observation
+import os
 import KomgaKit
+
+/// Logs home-row revalidation failures (cached data is kept, no error shown).
+private let homeLogger = Logger(subsystem: "jp.moongift.dokusho", category: "BrowseHome")
 
 /// The home screen: "Keep Reading" (読書中) and "On Deck" (次に読む) horizontal
 /// rows. Tapping a book pushes ``BrowseRoute/book(_:)`` (continue-from goes
@@ -114,11 +118,29 @@ final class HomeViewModel {
     private(set) var onDeck: [KomgaBook] = []
     private(set) var phase: Phase = .idle
 
+    private let cache = BrowseCache.shared
+    private let keepReadingKey = "home-keepreading"
+    private let onDeckKey = "home-ondeck"
+
+    /// On first appear, show the cached rows immediately, then revalidate over
+    /// the network (replacing the rows and refreshing the cache on success;
+    /// keeping cached data on failure).
     func loadIfNeeded(client: KomgaClient?) async {
         guard case .idle = phase else { return }
-        await reload(client: client)
+
+        let cachedKeep = await cache.load([KomgaBook].self, key: keepReadingKey)
+        let cachedDeck = await cache.load([KomgaBook].self, key: onDeckKey)
+        if let cachedKeep, let cachedDeck {
+            keepReading = cachedKeep
+            onDeck = cachedDeck
+            phase = .loaded
+            await revalidate(client: client)
+        } else {
+            await reload(client: client)
+        }
     }
 
+    /// Forces a fresh fetch (pull-to-refresh / retry) and refreshes the cache.
     func reload(client: KomgaClient?) async {
         guard let client else {
             phase = .failed("サーバーに接続していません。")
@@ -126,15 +148,35 @@ final class HomeViewModel {
         }
         phase = .loading
         do {
-            async let keep = client.keepReading(page: 0, size: browsePageSize)
-            async let deck = client.onDeck(page: 0, size: browsePageSize)
-            let (keepPage, deckPage) = try await (keep, deck)
-            keepReading = keepPage.content
-            onDeck = deckPage.content
+            try await fetchAndCache(client: client)
             phase = .loaded
         } catch is CancellationError {
         } catch {
             phase = .failed(ErrorMessage.text(for: error))
         }
+    }
+
+    /// Fetches without a spinner, keeping cached rows if the network fails.
+    private func revalidate(client: KomgaClient?) async {
+        guard let client else { return }
+        do {
+            try await fetchAndCache(client: client)
+            phase = .loaded
+        } catch is CancellationError {
+        } catch {
+            // Keep showing cached rows; no error view when cache is present.
+            homeLogger.error("Home revalidation failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Fetches both rows concurrently and writes each back to the cache.
+    private func fetchAndCache(client: KomgaClient) async throws {
+        async let keep = client.keepReading(page: 0, size: browsePageSize)
+        async let deck = client.onDeck(page: 0, size: browsePageSize)
+        let (keepPage, deckPage) = try await (keep, deck)
+        keepReading = keepPage.content
+        onDeck = deckPage.content
+        await cache.save(keepPage.content, key: keepReadingKey)
+        await cache.save(deckPage.content, key: onDeckKey)
     }
 }

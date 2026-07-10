@@ -1,6 +1,10 @@
 import SwiftUI
 import Observation
+import os
 import KomgaKit
+
+/// Logs library revalidation failures (cached data is kept, no error shown).
+private let libraryLogger = Logger(subsystem: "jp.moongift.dokusho", category: "BrowseLibraries")
 
 /// Root browse screen: the list of libraries plus an "all series" entry.
 ///
@@ -43,6 +47,7 @@ struct LibraryView: View {
                     }
                 }
             }
+            .refreshable { await viewModel.reload(client: services.client) }
         }
     }
 }
@@ -61,11 +66,25 @@ final class LibraryListViewModel {
     private(set) var libraries: [KomgaLibrary] = []
     private(set) var phase: Phase = .idle
 
+    private let cache = BrowseCache.shared
+    private let cacheKey = "libraries"
+
+    /// On first appear, show any cached libraries immediately, then revalidate
+    /// against the network (replacing the list and refreshing the cache on
+    /// success; keeping cached data on failure).
     func loadIfNeeded(client: KomgaClient?) async {
         guard case .idle = phase else { return }
-        await reload(client: client)
+
+        if let cached = await cache.load([KomgaLibrary].self, key: cacheKey) {
+            libraries = cached
+            phase = .loaded
+            await revalidate(client: client)
+        } else {
+            await reload(client: client)
+        }
     }
 
+    /// Forces a fresh fetch (pull-to-refresh / retry) and refreshes the cache.
     func reload(client: KomgaClient?) async {
         guard let client else {
             phase = .failed("サーバーに接続していません。")
@@ -73,11 +92,28 @@ final class LibraryListViewModel {
         }
         phase = .loading
         do {
-            libraries = try await client.libraries()
+            let fresh = try await client.libraries()
+            libraries = fresh
             phase = .loaded
+            await cache.save(fresh, key: cacheKey)
         } catch is CancellationError {
         } catch {
             phase = .failed(ErrorMessage.text(for: error))
+        }
+    }
+
+    /// Fetches without a spinner, keeping cached data if the network fails.
+    private func revalidate(client: KomgaClient?) async {
+        guard let client else { return }
+        do {
+            let fresh = try await client.libraries()
+            libraries = fresh
+            phase = .loaded
+            await cache.save(fresh, key: cacheKey)
+        } catch is CancellationError {
+        } catch {
+            // Keep showing cached libraries; no error view when cache is present.
+            libraryLogger.error("Libraries revalidation failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 }
@@ -116,7 +152,10 @@ struct LibrarySeriesView: View {
         guard !Task.isCancelled, let client = services.client else { return }
         let search = searchQueryKey.isEmpty ? nil : searchQueryKey
         let libraryID = libraryID
-        let newList = PaginatedList<KomgaSeries> { page, size in
+        // Cache only the unfiltered first page; search results are never cached.
+        let cache: BrowseCache? = search == nil ? .shared : nil
+        let cacheKey = search == nil ? "series-\(libraryID ?? "all")" : nil
+        let newList = PaginatedList<KomgaSeries>(cache: cache, cacheKey: cacheKey) { page, size in
             try await client.series(libraryID: libraryID, search: search, page: page, size: size)
         }
         list = newList

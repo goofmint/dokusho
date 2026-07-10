@@ -24,7 +24,7 @@ struct CollectionsView: View {
 
     private func buildIfNeeded() async {
         guard list == nil, let client = services.client else { return }
-        list = PaginatedList<KomgaCollection> { page, size in
+        list = PaginatedList<KomgaCollection>(cache: .shared, cacheKey: "collections") { page, size in
             try await client.collections(page: page, size: size)
         }
     }

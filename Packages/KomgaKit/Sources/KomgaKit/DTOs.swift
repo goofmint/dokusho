@@ -7,7 +7,7 @@ import Foundation
 /// Mirrors the Spring Data `Page` JSON shape used across the Komga v1 API.
 /// Only the fields the app consumes are decoded; unrelated fields such as
 /// `pageable` and `sort` are ignored.
-public struct Page<Element: Sendable & Decodable>: Sendable, Decodable {
+public struct Page<Element: Sendable & Codable>: Sendable, Codable {
     /// The elements on this page.
     public let content: [Element]
     /// Zero-based index of this page.
@@ -36,7 +36,7 @@ public struct Page<Element: Sendable & Decodable>: Sendable, Decodable {
 // MARK: - Library
 
 /// A Komga library.
-public struct KomgaLibrary: Sendable, Decodable, Identifiable, Equatable {
+public struct KomgaLibrary: Sendable, Codable, Identifiable, Equatable {
     public let id: String
     public let name: String
     /// Whether the library is currently unavailable (e.g. offline storage).
@@ -69,12 +69,24 @@ public enum KomgaReadingDirection: Sendable, Equatable {
         default: self = .unknown(rawValue)
         }
     }
+
+    /// The Komga wire string for this direction, preserving the original value
+    /// for ``unknown``.
+    var rawValue: String {
+        switch self {
+        case .leftToRight: return "LEFT_TO_RIGHT"
+        case .rightToLeft: return "RIGHT_TO_LEFT"
+        case .vertical: return "VERTICAL"
+        case .webtoon: return "WEBTOON"
+        case let .unknown(value): return value
+        }
+    }
 }
 
 // MARK: - Series
 
 /// A Komga series.
-public struct KomgaSeries: Sendable, Decodable, Identifiable, Equatable {
+public struct KomgaSeries: Sendable, Codable, Identifiable, Equatable {
     public let id: String
     public let name: String
     public let libraryId: String
@@ -91,7 +103,7 @@ public struct KomgaSeries: Sendable, Decodable, Identifiable, Equatable {
 }
 
 /// Metadata for a ``KomgaSeries``.
-public struct KomgaSeriesMetadata: Sendable, Decodable, Equatable {
+public struct KomgaSeriesMetadata: Sendable, Codable, Equatable {
     public let title: String
     public let status: String
     public let summary: String
@@ -116,6 +128,19 @@ public struct KomgaSeriesMetadata: Sendable, Decodable, Equatable {
         let raw = try container.decode(String.self, forKey: .readingDirection)
         readingDirectionRaw = raw
         readingDirection = KomgaReadingDirection(rawValue: raw)
+    }
+
+    /// Encodes the reading direction back to its single wire key. The derived
+    /// ``readingDirectionRaw`` is not a wire field, so it is omitted; a decode of
+    /// this output reconstructs both properties identically.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(title, forKey: .title)
+        try container.encode(status, forKey: .status)
+        try container.encode(summary, forKey: .summary)
+        try container.encode(publisher, forKey: .publisher)
+        try container.encode(language, forKey: .language)
+        try container.encode(readingDirection.rawValue, forKey: .readingDirection)
     }
 }
 
@@ -214,7 +239,7 @@ public struct KomgaPage: Sendable, Decodable, Equatable {
 // MARK: - Collection
 
 /// A Komga collection (an ordered/unordered group of series).
-public struct KomgaCollection: Sendable, Decodable, Identifiable, Equatable {
+public struct KomgaCollection: Sendable, Codable, Identifiable, Equatable {
     public let id: String
     public let name: String
     public let ordered: Bool
@@ -228,7 +253,7 @@ public struct KomgaCollection: Sendable, Decodable, Identifiable, Equatable {
 // MARK: - ReadList
 
 /// A Komga read list (an ordered/unordered group of books).
-public struct KomgaReadList: Sendable, Decodable, Identifiable, Equatable {
+public struct KomgaReadList: Sendable, Codable, Identifiable, Equatable {
     public let id: String
     public let name: String
     public let summary: String

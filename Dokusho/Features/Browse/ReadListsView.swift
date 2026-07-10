@@ -24,7 +24,7 @@ struct ReadListsView: View {
 
     private func buildIfNeeded() async {
         guard list == nil, let client = services.client else { return }
-        list = PaginatedList<KomgaReadList> { page, size in
+        list = PaginatedList<KomgaReadList>(cache: .shared, cacheKey: "readlists") { page, size in
             try await client.readLists(page: page, size: size)
         }
     }

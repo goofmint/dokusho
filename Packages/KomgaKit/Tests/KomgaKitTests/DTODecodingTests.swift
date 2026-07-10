@@ -61,6 +61,24 @@ struct DTODecodingTests {
         #expect(second.metadata.readingDirection == .leftToRight)
     }
 
+    @Test("Series page round-trips through Codable for the browse cache")
+    func encodeDecodeSeriesPageRoundTrip() throws {
+        let original = try decoder.decode(
+            Page<KomgaSeries>.self, from: Fixture.data("series_page")
+        )
+        // The browse cache persists these with a plain encoder/decoder pair
+        // (no dates in this tree), so mirror that here.
+        let data = try JSONEncoder().encode(original)
+        let restored = try JSONDecoder().decode(Page<KomgaSeries>.self, from: data)
+        #expect(restored.content == original.content)
+        #expect(restored.number == original.number)
+        #expect(restored.totalElements == original.totalElements)
+        #expect(restored.last == original.last)
+        // The derived raw reading-direction survives the round-trip.
+        #expect(restored.content[0].metadata.readingDirection == .rightToLeft)
+        #expect(restored.content[0].metadata.readingDirectionRaw == "RIGHT_TO_LEFT")
+    }
+
     @Test("Book decodes with media profile, page count, and read progress")
     func decodeBook() throws {
         let book = try decoder.decode(KomgaBook.self, from: Fixture.data("book"))

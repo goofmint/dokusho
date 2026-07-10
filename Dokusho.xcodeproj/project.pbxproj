@@ -3,11 +3,10 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		AA0000000000000000000010 /* Dokusho */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000001 /* Dokusho */; };
 		AA0000000000000000000020 /* KomgaKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000021 /* KomgaKit */; };
 		AA0000000000000000000030 /* ReadiumShared in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000031 /* ReadiumShared */; };
 		AA0000000000000000000032 /* ReadiumStreamer in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000033 /* ReadiumStreamer */; };
@@ -16,14 +15,14 @@
 
 /* Begin PBXFileReference section */
 		AA00000000000000000000A0 /* Dokusho.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Dokusho.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA00000000000000000000E1 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
+		AA00000000000000000000E2 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		AA00000000000000000000E3 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		AA00000000000000000000E4 /* Packages/KomgaKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = Packages/KomgaKit; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		AA0000000000000000000001 /* Dokusho */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Dokusho;
-			sourceTree = "<group>";
-		};
+		AA0000000000000000000001 /* Dokusho */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Dokusho; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -72,19 +71,12 @@
 		AA00000000000000000000D3 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				AA00000000000000000000E4 /* KomgaKit */,
+				AA00000000000000000000E4 /* Packages/KomgaKit */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
-
-/* Begin PBXFileReference (xcconfig & local package) */
-		AA00000000000000000000E1 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
-		AA00000000000000000000E2 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
-		AA00000000000000000000E3 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
-		AA00000000000000000000E4 /* KomgaKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = Packages/KomgaKit; sourceTree = "<group>"; };
-/* End */
 
 /* Begin PBXNativeTarget section */
 		AA00000000000000000000B0 /* Dokusho */ = {
@@ -142,7 +134,6 @@
 				AA00000000000000000000E5 /* XCLocalSwiftPackageReference "Packages/KomgaKit" */,
 				AA00000000000000000000E6 /* XCRemoteSwiftPackageReference "swift-toolkit" */,
 			);
-			preferredProjectObjectVersion = 77;
 			productRefGroup = AA00000000000000000000D1 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
