@@ -110,6 +110,49 @@ struct ClientErrorTests {
         }
     }
 
+    @Test("transient 502 on GET is retried and then succeeds")
+    func transient502Retries() async throws {
+        let harness = try MockHarness()
+        let calls = Counter()
+        harness.stub { _ in
+            if calls.increment() == 1 {
+                return .init(statusCode: 502)
+            }
+            return .init(data: try Fixture.data("libraries"))
+        }
+        let libraries = try await harness.client.libraries()
+        #expect(libraries.count == 2)
+        #expect(calls.value == 2)
+    }
+
+    @Test("persistent 502 on GET exhausts retries and throws")
+    func persistent502Throws() async throws {
+        let harness = try MockHarness()
+        let calls = Counter()
+        harness.stub { _ in
+            _ = calls.increment()
+            return .init(statusCode: 502)
+        }
+        await #expect(throws: KomgaError.serverError(status: 502)) {
+            _ = try await harness.client.libraries()
+        }
+        #expect(calls.value == 3) // initial attempt + 2 retries
+    }
+
+    @Test("500 on GET is not retried (non-transient)")
+    func nonTransient500NoRetry() async throws {
+        let harness = try MockHarness()
+        let calls = Counter()
+        harness.stub { _ in
+            _ = calls.increment()
+            return .init(statusCode: 500)
+        }
+        await #expect(throws: KomgaError.serverError(status: 500)) {
+            _ = try await harness.client.libraries()
+        }
+        #expect(calls.value == 1)
+    }
+
     @Test("malformed body surfaces decoding error")
     func decodingError() async throws {
         let harness = try MockHarness()

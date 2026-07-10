@@ -231,8 +231,45 @@ public struct KomgaClient: Sendable {
         }
     }
 
+    /// Backoff delays for transient-failure retries of GET requests.
+    private static let retryDelays: [Duration] = [.milliseconds(500), .milliseconds(1500)]
+
     /// Executes a request, validating the status code, returning the body data.
+    ///
+    /// GET requests are retried (with backoff) on transient failures: HTTP
+    /// 502/503/504 and timeouts. Origins behind proxies (e.g. Cloudflare)
+    /// return these sporadically; a blip should not surface as an error screen.
     private func perform(_ request: URLRequest) async throws -> Data {
+        let isIdempotent = (request.httpMethod ?? "GET") == "GET"
+        var attempt = 0
+        while true {
+            do {
+                return try await performOnce(request)
+            } catch let error as KomgaError {
+                guard isIdempotent, attempt < Self.retryDelays.count, Self.isTransient(error) else {
+                    throw error
+                }
+                Self.logger.info(
+                    "Retrying (\(attempt + 1)) after transient failure: \(request.url?.absoluteString ?? "?", privacy: .public)"
+                )
+                try await Task.sleep(for: Self.retryDelays[attempt])
+                attempt += 1
+            }
+        }
+    }
+
+    private static func isTransient(_ error: KomgaError) -> Bool {
+        switch error {
+        case .serverError(let status):
+            return [502, 503, 504].contains(status)
+        case .network(let urlError):
+            return [.timedOut, .networkConnectionLost].contains(urlError.code)
+        default:
+            return false
+        }
+    }
+
+    private func performOnce(_ request: URLRequest) async throws -> Data {
         Self.logRequest(request)
         let data: Data
         let response: URLResponse

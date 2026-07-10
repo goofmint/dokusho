@@ -83,3 +83,21 @@ func queryDictionary(_ request: URLRequest) -> [String: String] {
     }
     return result
 }
+
+/// A thread-safe call counter for stateful stubs (e.g. fail-then-succeed).
+final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.withLock { count }
+    }
+
+    /// Increments and returns the new value.
+    func increment() -> Int {
+        lock.withLock {
+            count += 1
+            return count
+        }
+    }
+}
