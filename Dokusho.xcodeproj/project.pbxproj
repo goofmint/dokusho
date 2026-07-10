@@ -1,0 +1,318 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA0000000000000000000010 /* Dokusho */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000001 /* Dokusho */; };
+		AA0000000000000000000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000002 /* Assets.xcassets */; };
+		AA0000000000000000000020 /* KomgaKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000021 /* KomgaKit */; };
+		AA0000000000000000000030 /* ReadiumShared in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000031 /* ReadiumShared */; };
+		AA0000000000000000000032 /* ReadiumStreamer in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000033 /* ReadiumStreamer */; };
+		AA0000000000000000000034 /* ReadiumNavigator in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000035 /* ReadiumNavigator */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AA0000000000000000000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AA00000000000000000000A0 /* Dokusho.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Dokusho.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		AA0000000000000000000001 /* Dokusho */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AA0000000000000000000003 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
+			path = Dokusho;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		AA0000000000000000000003 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Assets.xcassets,
+			);
+			target = AA00000000000000000000B0 /* Dokusho */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AA00000000000000000000C0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0000000000000000000020 /* KomgaKit in Frameworks */,
+				AA0000000000000000000030 /* ReadiumShared in Frameworks */,
+				AA0000000000000000000032 /* ReadiumStreamer in Frameworks */,
+				AA0000000000000000000034 /* ReadiumNavigator in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AA00000000000000000000D0 = {
+			isa = PBXGroup;
+			children = (
+				AA0000000000000000000001 /* Dokusho */,
+				AA00000000000000000000D2 /* Configs */,
+				AA00000000000000000000D3 /* Packages */,
+				AA00000000000000000000D1 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA00000000000000000000D1 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AA00000000000000000000A0 /* Dokusho.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AA00000000000000000000D2 /* Configs */ = {
+			isa = PBXGroup;
+			children = (
+				AA00000000000000000000E1 /* Shared.xcconfig */,
+				AA00000000000000000000E2 /* Debug.xcconfig */,
+				AA00000000000000000000E3 /* Release.xcconfig */,
+			);
+			path = Configs;
+			sourceTree = "<group>";
+		};
+		AA00000000000000000000D3 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				AA00000000000000000000E4 /* KomgaKit */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXFileReference (xcconfig & local package) */
+		AA00000000000000000000E1 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
+		AA00000000000000000000E2 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		AA00000000000000000000E3 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		AA00000000000000000000E4 /* KomgaKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = Packages/KomgaKit; sourceTree = "<group>"; };
+/* End */
+
+/* Begin PBXNativeTarget section */
+		AA00000000000000000000B0 /* Dokusho */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA00000000000000000000F0 /* Build configuration list for PBXNativeTarget "Dokusho" */;
+			buildPhases = (
+				AA00000000000000000000C1 /* Sources */,
+				AA00000000000000000000C0 /* Frameworks */,
+				AA00000000000000000000C2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				AA0000000000000000000001 /* Dokusho */,
+			);
+			name = Dokusho;
+			packageProductDependencies = (
+				AA0000000000000000000021 /* KomgaKit */,
+				AA0000000000000000000031 /* ReadiumShared */,
+				AA0000000000000000000033 /* ReadiumStreamer */,
+				AA0000000000000000000035 /* ReadiumNavigator */,
+			);
+			productName = Dokusho;
+			productReference = AA00000000000000000000A0 /* Dokusho.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA00000000000000000000AA /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2660;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					AA00000000000000000000B0 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+				};
+			};
+			buildConfigurationList = AA00000000000000000000AB /* Build configuration list for PBXProject "Dokusho" */;
+			compatibilityVersion = "Xcode 15.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AA00000000000000000000D0;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AA00000000000000000000E5 /* XCLocalSwiftPackageReference "Packages/KomgaKit" */,
+				AA00000000000000000000E6 /* XCRemoteSwiftPackageReference "swift-toolkit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = AA00000000000000000000D1 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AA00000000000000000000B0 /* Dokusho */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA00000000000000000000C2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0000000000000000000011 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA00000000000000000000C1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AA0000000000000000000100 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = AA00000000000000000000E2 /* Debug.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+			};
+			name = Debug;
+		};
+		AA0000000000000000000101 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = AA00000000000000000000E3 /* Release.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		AA0000000000000000000110 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = AA00000000000000000000E2 /* Debug.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 0.1.0;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		AA0000000000000000000111 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = AA00000000000000000000E3 /* Release.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 0.1.0;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA00000000000000000000AB /* Build configuration list for PBXProject "Dokusho" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000000000000000000100 /* Debug */,
+				AA0000000000000000000101 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA00000000000000000000F0 /* Build configuration list for PBXNativeTarget "Dokusho" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000000000000000000110 /* Debug */,
+				AA0000000000000000000111 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		AA00000000000000000000E5 /* XCLocalSwiftPackageReference "Packages/KomgaKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/KomgaKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AA00000000000000000000E6 /* XCRemoteSwiftPackageReference "swift-toolkit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/readium/swift-toolkit";
+			requirement = {
+				kind = exactVersion;
+				version = 3.10.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA0000000000000000000021 /* KomgaKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KomgaKit;
+		};
+		AA0000000000000000000031 /* ReadiumShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA00000000000000000000E6 /* XCRemoteSwiftPackageReference "swift-toolkit" */;
+			productName = ReadiumShared;
+		};
+		AA0000000000000000000033 /* ReadiumStreamer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA00000000000000000000E6 /* XCRemoteSwiftPackageReference "swift-toolkit" */;
+			productName = ReadiumStreamer;
+		};
+		AA0000000000000000000035 /* ReadiumNavigator */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA00000000000000000000E6 /* XCRemoteSwiftPackageReference "swift-toolkit" */;
+			productName = ReadiumNavigator;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = AA00000000000000000000AA /* Project object */;
+}
