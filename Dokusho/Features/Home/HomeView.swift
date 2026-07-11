@@ -136,6 +136,13 @@ final class HomeViewModel {
     /// check-and-set has no `await` between them.
     @ObservationIgnored private var isRevalidating = false
 
+    /// Monotonic id bumped at the start of every fetch (manual `reload` and
+    /// silent `revalidate` alike). A fetch only applies its result if it is
+    /// still the latest — so a slower fetch can never overwrite the rows/cache
+    /// written by a fetch that started after it (e.g. a stale silent revalidate
+    /// clobbering a manual pull-to-refresh).
+    @ObservationIgnored private var fetchGeneration = 0
+
     /// On first appear, show the cached rows immediately, then revalidate over
     /// the network (replacing the rows and refreshing the cache on success;
     /// keeping cached data on failure).
@@ -207,10 +214,19 @@ final class HomeViewModel {
     }
 
     /// Fetches both rows concurrently and writes each back to the cache.
+    ///
+    /// Tagged with a generation so a fetch that was superseded while awaiting
+    /// the network drops its (older) result instead of overwriting the newer
+    /// one — the writes are otherwise shared by `reload` and `revalidate`.
     private func fetchAndCache(client: KomgaClient) async throws {
+        fetchGeneration &+= 1
+        let generation = fetchGeneration
         async let keep = client.keepReading(page: 0, size: browsePageSize)
         async let deck = client.onDeck(page: 0, size: browsePageSize)
         let (keepPage, deckPage) = try await (keep, deck)
+        // A newer fetch started while we were awaiting: its result supersedes
+        // ours, so don't apply stale rows/cache over it.
+        guard generation == fetchGeneration else { return }
         keepReading = keepPage.content
         onDeck = deckPage.content
         await cache.save(keepPage.content, key: keepReadingKey)
