@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 @main
 struct DokushoApp: App {
@@ -33,9 +34,36 @@ struct DokushoApp: App {
                     appDelegate.downloadManager = services.downloadManager
                 }
                 .onChange(of: scenePhase) { _, phase in
-                    // Push any queued read progress as soon as we're active again.
-                    if phase == .active, let syncer = services.progressSyncer {
+                    guard let syncer = services.progressSyncer else { return }
+                    switch phase {
+                    case .active:
+                        // Replay any previously-failed sends now that we're back.
                         Task { await syncer.flushPending() }
+                    case .background:
+                        // Leaving the app can strand a page still inside its
+                        // debounce window; push it before we're suspended. Use
+                        // `.background` (not `.inactive`) to avoid double-firing
+                        // on transient inactive states like Control Center.
+                        // Wrap the flush in a background task so the OS grants
+                        // time to finish the PATCH before suspending; always
+                        // end it (on completion and on expiration).
+                        let app = UIApplication.shared
+                        Task { @MainActor in
+                            var taskID = UIBackgroundTaskIdentifier.invalid
+                            taskID = app.beginBackgroundTask(withName: "flush-read-progress") {
+                                app.endBackgroundTask(taskID)
+                                taskID = .invalid
+                            }
+                            await syncer.flushOutstanding()
+                            if taskID != .invalid {
+                                app.endBackgroundTask(taskID)
+                                taskID = .invalid
+                            }
+                        }
+                    case .inactive:
+                        break
+                    @unknown default:
+                        break
                     }
                 }
         }

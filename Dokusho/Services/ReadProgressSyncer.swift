@@ -31,6 +31,10 @@ import KomgaKit
 ///   per book is kept) and retried by ``flushPending()``.
 /// - ``flushPending()`` is called on launch/connect and whenever `NWPathMonitor`
 ///   reports the network is satisfied again.
+/// - ``flushOutstanding()`` bypasses the debounce and pushes every recorded-but-
+///   not-yet-sent value immediately. Call it when the reader closes or the app
+///   backgrounds so a page turned inside the 2-second window still reaches the
+///   server.
 ///
 /// Page numbers are **1-based** throughout, matching Komga's API.
 @MainActor
@@ -52,6 +56,11 @@ final class ReadProgressSyncer {
 
     /// The most recently recorded value per book, read by the debounced send.
     @ObservationIgnored private var latest: [String: (page: Int, completed: Bool)] = [:]
+
+    /// The last value successfully PATCHed per book (in-memory). Lets
+    /// ``flushOutstanding()`` skip books whose latest recorded value has already
+    /// reached the server, so it never re-sends an already-synced page.
+    @ObservationIgnored private var lastSent: [String: (page: Int, completed: Bool)] = [:]
 
     /// In-flight PATCH send task per book. Each new send `await`s the previous
     /// one for the same book before issuing its own PATCH, so concurrent updates
@@ -86,13 +95,22 @@ final class ReadProgressSyncer {
     ///   - page: The last page read (1-based).
     ///   - completed: Whether the book is now complete (true on last page).
     /// `updateLocalState` persists ``LocalReadingState`` synchronously on every
-    /// call, so the durable record of "where the user is" is always up to date.
-    /// The debounced network send below is purely an optimization: if it is
-    /// dropped (e.g. the app is disconnected before the 2s window elapses),
-    /// nothing durable is lost — `flushPending` and the next connect reconcile
-    /// from the persisted local state. That is why we do NOT eagerly queue every
-    /// turn into ``PendingProgress`` (doing so would race with `flushPending` on
-    /// foreground).
+    /// call, so the durable record of "where the user is" is always up to date
+    /// locally, and the reader resumes from it.
+    ///
+    /// Durability of the *server* value has three layers:
+    /// 1. The debounced send below delivers it after 2 s of inactivity.
+    /// 2. If the reader closes or the app backgrounds before that window
+    ///    elapses, ``flushOutstanding()`` cancels the debounce and sends the
+    ///    outstanding value immediately.
+    /// 3. If a send fails (offline / server error) it is queued to
+    ///    ``PendingProgress`` and replayed by ``flushPending()`` on the next
+    ///    connect or foreground.
+    ///
+    /// `flushPending` only replays previously *failed* sends; it does not
+    /// reconcile ``LocalReadingState`` to the server. That reconciliation is the
+    /// job of ``flushOutstanding()``. We do NOT eagerly queue every turn into
+    /// ``PendingProgress`` (doing so would race with `flushPending`).
     func recordProgress(bookID: String, page: Int, completed: Bool) {
         updateLocalState(bookID: bookID, page: page, completed: completed)
         latest[bookID] = (page, completed)
@@ -142,6 +160,42 @@ final class ReadProgressSyncer {
         }
     }
 
+    /// Immediately pushes every recorded-but-not-yet-synced value to the server,
+    /// bypassing the 2-second debounce.
+    ///
+    /// Call when the reader closes or the app backgrounds: a page turned inside
+    /// the debounce window would otherwise never leave the device until the next
+    /// launch, so briefly-read books never appear in Komga's "Keep Reading".
+    ///
+    /// For each book whose ``latest`` value differs from the last value
+    /// successfully sent, this cancels the outstanding debounce task and issues
+    /// the send now, reusing the same per-book serialization (`sendTasks`
+    /// chaining, so it cannot overtake an in-flight send and roll progress
+    /// backward) and failure→``PendingProgress`` path as the debounced send.
+    /// Books already in sync are skipped. Awaits completion of the sends it
+    /// starts.
+    func flushOutstanding() async {
+        var started: [Task<Void, Never>] = []
+        for (bookID, value) in latest {
+            if let sent = lastSent[bookID], sent == value {
+                continue
+            }
+            debounceTasks[bookID]?.cancel()
+            debounceTasks[bookID] = nil
+            let previous = sendTasks[bookID]
+            let task = Task { [weak self] in
+                await previous?.value
+                guard let self else { return }
+                await self.send(bookID: bookID, page: value.page, completed: value.completed)
+            }
+            sendTasks[bookID] = task
+            started.append(task)
+        }
+        for task in started {
+            await task.value
+        }
+    }
+
     // MARK: - Sending
 
     /// Attempts a single PATCH; queues on failure.
@@ -152,7 +206,9 @@ final class ReadProgressSyncer {
                 page: completed ? nil : page,
                 completed: completed
             )
-            // On success, drop any stale queued entry for this book.
+            // On success, drop any stale queued entry for this book and remember
+            // the synced value so `flushOutstanding` won't re-send it.
+            lastSent[bookID] = (page, completed)
             removePending(bookID: bookID)
             logger.info("Synced progress for book \(bookID, privacy: .public) page=\(page) completed=\(completed)")
         } catch {

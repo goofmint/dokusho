@@ -19,6 +19,13 @@ struct HomeView: View {
                 .navigationTitle("ホーム")
                 .browseDestinations()
                 .task { await viewModel.loadIfNeeded(client: services.client) }
+                .onAppear {
+                    // TabView keeps this view alive, so `.task` runs only once.
+                    // Silently revalidate on every return so "読書中" reflects
+                    // reading done elsewhere in the app. Guarded to `.loaded`, so
+                    // the first appearance defers to `.task` (no double fetch).
+                    Task { await viewModel.revalidateIfLoaded(client: services.client) }
+                }
                 .refreshable { await viewModel.reload(client: services.client) }
         }
     }
@@ -122,6 +129,20 @@ final class HomeViewModel {
     private let keepReadingKey = "home-keepreading"
     private let onDeckKey = "home-ondeck"
 
+    /// Guards against overlapping silent revalidations. `.onAppear` can fire in
+    /// quick succession (and alongside the cache-hit revalidate in
+    /// `loadIfNeeded`); a second revalidate while one is in flight would race
+    /// the same row/cache writes. Single-flight on the main actor: the
+    /// check-and-set has no `await` between them.
+    @ObservationIgnored private var isRevalidating = false
+
+    /// Monotonic id bumped at the start of every fetch (manual `reload` and
+    /// silent `revalidate` alike). A fetch only applies its result if it is
+    /// still the latest — so a slower fetch can never overwrite the rows/cache
+    /// written by a fetch that started after it (e.g. a stale silent revalidate
+    /// clobbering a manual pull-to-refresh).
+    @ObservationIgnored private var fetchGeneration = 0
+
     /// On first appear, show the cached rows immediately, then revalidate over
     /// the network (replacing the rows and refreshing the cache on success;
     /// keeping cached data on failure).
@@ -138,6 +159,16 @@ final class HomeViewModel {
         } else {
             await reload(client: client)
         }
+    }
+
+    /// Silently revalidates on a repeat appearance, but only once the initial
+    /// load has finished successfully. Cached rows stay visible throughout; on
+    /// success the rows and cache update, on failure the cached rows are kept.
+    /// The `.loaded` guard makes the first appearance a no-op (``loadIfNeeded``
+    /// via `.task` owns the first fetch), so the two never race a double fetch.
+    func revalidateIfLoaded(client: KomgaClient?) async {
+        guard case .loaded = phase else { return }
+        await revalidate(client: client)
     }
 
     /// Forces a fresh fetch (pull-to-refresh / retry) and refreshes the cache.
@@ -164,6 +195,10 @@ final class HomeViewModel {
     /// Fetches without a spinner, keeping cached rows if the network fails.
     private func revalidate(client: KomgaClient?) async {
         guard let client else { return }
+        // Single-flight: skip if a revalidation is already running.
+        guard !isRevalidating else { return }
+        isRevalidating = true
+        defer { isRevalidating = false }
         let previousPhase = phase
         do {
             try await fetchAndCache(client: client)
@@ -179,13 +214,27 @@ final class HomeViewModel {
     }
 
     /// Fetches both rows concurrently and writes each back to the cache.
+    ///
+    /// Tagged with a generation so a fetch that was superseded while awaiting
+    /// the network drops its (older) result instead of overwriting the newer
+    /// one — the writes are otherwise shared by `reload` and `revalidate`.
     private func fetchAndCache(client: KomgaClient) async throws {
+        fetchGeneration &+= 1
+        let generation = fetchGeneration
         async let keep = client.keepReading(page: 0, size: browsePageSize)
         async let deck = client.onDeck(page: 0, size: browsePageSize)
         let (keepPage, deckPage) = try await (keep, deck)
+        // A newer fetch started while we were awaiting: its result supersedes
+        // ours, so don't apply stale rows/cache over it.
+        guard generation == fetchGeneration else { return }
         keepReading = keepPage.content
         onDeck = deckPage.content
+        // Recheck before each disk write: a newer fetch can complete during a
+        // save's `await`, so re-verify we're still latest to avoid persisting a
+        // mixed-generation cache (keep from one fetch, on-deck from another).
+        guard generation == fetchGeneration else { return }
         await cache.save(keepPage.content, key: keepReadingKey)
+        guard generation == fetchGeneration else { return }
         await cache.save(deckPage.content, key: onDeckKey)
     }
 }
