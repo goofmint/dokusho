@@ -33,9 +33,21 @@ struct DokushoApp: App {
                     appDelegate.downloadManager = services.downloadManager
                 }
                 .onChange(of: scenePhase) { _, phase in
-                    // Push any queued read progress as soon as we're active again.
-                    if phase == .active, let syncer = services.progressSyncer {
+                    guard let syncer = services.progressSyncer else { return }
+                    switch phase {
+                    case .active:
+                        // Replay any previously-failed sends now that we're back.
                         Task { await syncer.flushPending() }
+                    case .background:
+                        // Leaving the app can strand a page still inside its
+                        // debounce window; push it before we're suspended. Use
+                        // `.background` (not `.inactive`) to avoid double-firing
+                        // on transient inactive states like Control Center.
+                        Task { await syncer.flushOutstanding() }
+                    case .inactive:
+                        break
+                    @unknown default:
+                        break
                     }
                 }
         }

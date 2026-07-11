@@ -31,6 +31,13 @@ struct ReaderRootView: View {
     var body: some View {
         content
             .navigationBarTitleDisplayMode(.inline)
+            .onDisappear {
+                // Closing the reader (back / dismiss) can happen inside the 2s
+                // debounce window; push any outstanding page now so a briefly
+                // read book still reaches Komga. Covers every reader type, since
+                // ReaderRootView hosts them all.
+                Task { await services.progressSyncer?.flushOutstanding() }
+            }
     }
 
     @ViewBuilder

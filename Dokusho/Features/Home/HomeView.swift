@@ -19,6 +19,13 @@ struct HomeView: View {
                 .navigationTitle("ホーム")
                 .browseDestinations()
                 .task { await viewModel.loadIfNeeded(client: services.client) }
+                .onAppear {
+                    // TabView keeps this view alive, so `.task` runs only once.
+                    // Silently revalidate on every return so "読書中" reflects
+                    // reading done elsewhere in the app. Guarded to `.loaded`, so
+                    // the first appearance defers to `.task` (no double fetch).
+                    Task { await viewModel.revalidateIfLoaded(client: services.client) }
+                }
                 .refreshable { await viewModel.reload(client: services.client) }
         }
     }
@@ -138,6 +145,16 @@ final class HomeViewModel {
         } else {
             await reload(client: client)
         }
+    }
+
+    /// Silently revalidates on a repeat appearance, but only once the initial
+    /// load has finished successfully. Cached rows stay visible throughout; on
+    /// success the rows and cache update, on failure the cached rows are kept.
+    /// The `.loaded` guard makes the first appearance a no-op (``loadIfNeeded``
+    /// via `.task` owns the first fetch), so the two never race a double fetch.
+    func revalidateIfLoaded(client: KomgaClient?) async {
+        guard case .loaded = phase else { return }
+        await revalidate(client: client)
     }
 
     /// Forces a fresh fetch (pull-to-refresh / retry) and refreshes the cache.
