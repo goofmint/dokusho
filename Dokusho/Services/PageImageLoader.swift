@@ -324,10 +324,12 @@ actor PageImageLoader {
 
     /// Writes bytes to disk, then evicts least-recently-used files if over budget.
     ///
-    /// Only ever called on a disk miss (the load path fetches from the network
-    /// only when `fileURL` had no bytes), so this never overwrites an existing
-    /// file and the counter increment cannot double-count.
+    /// Usually called on a disk miss, but a cached file that exists yet fails to
+    /// decode (corrupt bytes, formats ImageIO rejects) is re-fetched and
+    /// **overwritten** here — so the cumulative counter is updated by the delta
+    /// against the file's previous size, never by a blind increment.
     private func store(data: Data, at fileURL: URL, directory: URL, diskLimit: Int) {
+        let previousSize = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
         do {
             try data.write(to: fileURL, options: .atomic)
             var resourceValues = URLResourceValues()
@@ -339,8 +341,9 @@ actor PageImageLoader {
             logger.error("Failed to write cache file: \(error.localizedDescription, privacy: .public)")
             return
         }
-        // Increment the cumulative counter (seeded lazily on first use).
-        directoryByteCounts[directory.path] = currentSize(of: directory) + data.count
+        // Update the cumulative counter (seeded lazily on first use) by the
+        // net change so overwrites never double-count.
+        directoryByteCounts[directory.path] = max(0, currentSize(of: directory) + data.count - previousSize)
         evictIfNeeded(directory: directory, limit: diskLimit)
     }
 
