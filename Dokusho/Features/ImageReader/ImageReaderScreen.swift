@@ -36,7 +36,6 @@ struct ImageReaderScreen: View {
     let onProgress: @MainActor (Int, Bool) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.modelContext) private var modelContext
 
     @State private var progression: ReadingProgression = .leftToRight
@@ -65,9 +64,11 @@ struct ImageReaderScreen: View {
         return max(book.media.pagesCount, 1)
     }
 
-    /// Spreads are used in landscape or on regular-width (iPad) layouts.
+    /// Spreads are used only in landscape, on every device. Portrait always
+    /// shows a single page (including iPad portrait, which is tall enough that a
+    /// two-page spread would render each page too small).
     private var usesSpread: Bool {
-        horizontalSizeClass == .regular || isLandscape
+        isLandscape
     }
 
     @State private var isLandscape = false

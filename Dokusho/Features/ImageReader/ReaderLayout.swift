@@ -50,7 +50,7 @@ enum ReaderSpread: Equatable {
 struct ReaderLayout: Equatable {
     /// Total pages in the book (1-based, so pages are `1...pageCount`).
     let pageCount: Int
-    /// Whether two-page spreads are used (landscape / regular width).
+    /// Whether two-page spreads are used (landscape only; portrait is 1-page).
     let usesSpread: Bool
     /// The reading progression (affects side placement, not this array's order).
     let progression: ReadingProgression
