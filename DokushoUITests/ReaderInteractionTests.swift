@@ -19,10 +19,12 @@ final class ReaderInteractionTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["-debugPdfReader"]
         app.launch()
-        // Wait for the harness to render the first page (HUD hidden initially,
-        // so wait on the app window instead of a specific element).
+        // Wait deterministically for the reader pager to be installed, via the
+        // "reader.page" identifier set in ImageReaderScreen, rather than sleeping
+        // for a fixed duration.
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
-        sleep(2)
+        let readerPage = app.descendants(matching: .any)["reader.page"]
+        XCTAssertTrue(readerPage.waitForExistence(timeout: 10), "リーダーのページが表示されるはず")
     }
 
     /// The progress slider only exists while the progress bar is shown.
@@ -79,8 +81,15 @@ final class ReaderInteractionTests: XCTestCase {
             NSPredicate(format: "label CONTAINS '送り'")
         ).firstMatch
         XCTAssertTrue(direction.exists, "ヘッダーに読み方向トグルがあるはず")
+        // The progression label toggles between 左綴じ（右送り） and 右綴じ（左送り）.
+        let labelBefore = direction.label
         direction.tap()
-        // Still present (and tappable) after toggling.
-        XCTAssertTrue(direction.exists)
+        // After toggling, a direction control with a *different* 送り label must
+        // exist — proving the toggle changed reading direction, and the control
+        // is still present.
+        let toggled = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS '送り' AND label != %@", labelBefore)
+        ).firstMatch
+        XCTAssertTrue(toggled.waitForExistence(timeout: 3), "トグルで読み方向ラベルが切り替わるはず")
     }
 }

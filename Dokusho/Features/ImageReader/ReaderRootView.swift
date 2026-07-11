@@ -186,7 +186,12 @@ private struct LocalPdfImageReader: View {
             ProgressView("PDF を開いています…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .task {
-                    if let source = LocalPdfPageSource(fileURL: fileURL) {
+                    // PDFDocument parsing can be slow; build the source off the
+                    // main actor and update the phase back on it.
+                    let source = await Task.detached(priority: .userInitiated) {
+                        LocalPdfPageSource(fileURL: fileURL)
+                    }.value
+                    if let source {
                         phase = .ready(source)
                     } else {
                         phase = .failed
@@ -279,8 +284,12 @@ private struct DownloadPromptView: View {
 
     private func startDownload() {
         downloadError = nil
+        guard let downloadManager = services.downloadManager else {
+            downloadError = "サーバーに接続していないためダウンロードできません。"
+            return
+        }
         do {
-            try services.downloadManager?.download(book: book)
+            try downloadManager.download(book: book)
         } catch {
             downloadError = error.localizedDescription
         }

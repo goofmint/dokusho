@@ -48,7 +48,7 @@
   "readProgress": {
     "page": 42,
     "completed": false,
-    "readDate": "2024-06-10T18:22:00.000Z",
+    "readDate": "2024-06-10T18:22:00.123Z",
     "created": "2024-06-01T10:00:00Z",
     "lastModified": "2024-06-10T18:22:00Z",
     "deviceId": "device-1",

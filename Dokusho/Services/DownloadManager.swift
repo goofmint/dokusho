@@ -80,6 +80,13 @@ final class DownloadManager {
     /// Resume data retained from a failed/cancelled download, keyed by bookID.
     @ObservationIgnored private var resumeData: [String: Data] = [:]
 
+    /// Book IDs whose in-flight task was cancelled by the user (via
+    /// ``cancel(bookID:)``). Lets `didComplete` distinguish a user cancellation
+    /// (already handled, silently ignored) from a system-initiated cancellation
+    /// (which must fall through to normal failure handling). The flag is removed
+    /// on every `didComplete` path so it never leaks.
+    @ObservationIgnored private var userCancelledBookIDs: Set<String> = []
+
     /// Completion handler stored by ``AppDelegate`` when the system wakes the
     /// app for background session events. Invoked once the session drains.
     @ObservationIgnored private var backgroundCompletionHandler: (() -> Void)?
@@ -109,8 +116,11 @@ final class DownloadManager {
             delegate: SessionDelegate(manager: self),
             delegateQueue: nil
         )
-        reconcile()
-        reattachRunningTasks()
+        // Query the background session's live tasks FIRST, then reconcile
+        // (skipping books with a live task) and reattach. Reconciling before
+        // reattach would delete the working directory / reset the state of a
+        // download still in flight after a cold launch.
+        reconcileAndReattach()
     }
 
     // MARK: - Public API
@@ -164,6 +174,9 @@ final class DownloadManager {
     /// Cancels an in-flight download, retaining resume data when available.
     func cancel(bookID: String) {
         guard let task = activeTasks[bookID] else { return }
+        // Flag before cancelling so the resulting `NSURLErrorCancelled` in
+        // `didComplete` is recognized as user-initiated.
+        userCancelledBookIDs.insert(bookID)
         task.cancel(byProducingResumeData: { [weak self] data in
             guard let data else { return }
             Task { @MainActor in
@@ -280,10 +293,28 @@ final class DownloadManager {
         }
     }
 
+    /// Handles the case where the just-finished download could not be staged to
+    /// an app-controlled temp file (see `SessionDelegate.stage`). Without this,
+    /// the book would be stranded in `.downloading` forever.
+    fileprivate func didFailStaging(taskIdentifier: Int, bookIDFromTask: String?) {
+        guard let bookID = taskToBook[taskIdentifier] ?? bookIDFromTask else {
+            logger.error("Staging failed for unknown task \(taskIdentifier)")
+            return
+        }
+        let error = DownloadError.missingDownloadedFile
+        states[bookID] = .failed(error)
+        updatePersistedState(bookID: bookID, to: .failed(error))
+        logger.error("Failed to stage completed download for book \(bookID, privacy: .public)")
+    }
+
     fileprivate func didComplete(taskIdentifier: Int, bookIDFromTask: String?, error: Error?) {
         let bookID = taskToBook[taskIdentifier] ?? bookIDFromTask
         defer {
-            if let bookID { clearActive(bookID: bookID) }
+            if let bookID {
+                clearActive(bookID: bookID)
+                // Clear the user-cancel flag on every path so it never leaks.
+                userCancelledBookIDs.remove(bookID)
+            }
         }
         guard let bookID else { return }
 
@@ -292,9 +323,12 @@ final class DownloadManager {
             return
         }
 
-        // Cancellation is user-initiated; state was already reset in cancel().
         let nsError = error as NSError
-        if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
+        let isCancellation = nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
+        // Only a *user*-initiated cancellation is silently ignored (state was
+        // already reset in cancel()). A system-initiated cancellation is
+        // unflagged and must fall through to normal failure handling below.
+        if isCancellation && userCancelledBookIDs.contains(bookID) {
             return
         }
         // Retain resume data if the system provided it.
@@ -320,12 +354,20 @@ final class DownloadManager {
     ///   `notDownloaded` (the user can re-download).
     /// - A `pending`/incomplete record whose file is absent is reset too.
     /// - Orphan files/directories with no matching record are removed.
-    private func reconcile() {
+    ///
+    /// Books in `liveBookIDs` are left completely untouched: a background task
+    /// still owns them, so their directory/state must survive until reattach.
+    private func reconcile(skipping liveBookIDs: Set<String>) {
         let records = allRecords()
         var knownIDs: Set<String> = []
 
         for record in records {
             knownIDs.insert(record.bookID)
+            // A live background task owns this book: don't delete its directory
+            // or reset its state; reattach will resume routing its callbacks.
+            if liveBookIDs.contains(record.bookID) {
+                continue
+            }
             let fileURL = fileURL(for: record.bookID, profile: record.mediaProfile)
             let exists = FileManager.default.fileExists(atPath: fileURL.path)
             if record.state == DownloadState.downloaded.persistedRawValue && exists {
@@ -363,19 +405,29 @@ final class DownloadManager {
         }
     }
 
-    /// Reattaches any tasks still running in the background session after a
-    /// cold launch, so progress/completion callbacks resume routing correctly.
-    private func reattachRunningTasks() {
+    /// Reconciles persisted records against disk, then reattaches any tasks
+    /// still running in the background session after a cold launch.
+    ///
+    /// Ordering matters: `session.getAllTasks` is queried first so reconcile can
+    /// SKIP books with a live task (leaving their directory/state intact) before
+    /// reattach re-binds those tasks and resumes routing their callbacks.
+    private func reconcileAndReattach() {
         session.getAllTasks { [weak self] tasks in
             Task { @MainActor in
                 guard let self else { return }
+                var live: [(bookID: String, task: URLSessionDownloadTask)] = []
                 for task in tasks {
                     guard let downloadTask = task as? URLSessionDownloadTask,
                           let bookID = task.taskDescription else { continue }
-                    self.activeTasks[bookID] = downloadTask
-                    self.taskToBook[task.taskIdentifier] = bookID
-                    if case .downloaded = self.state(for: bookID) {} else {
-                        self.states[bookID] = .downloading(progress: 0)
+                    live.append((bookID, downloadTask))
+                }
+                let liveIDs = Set(live.map(\.bookID))
+                self.reconcile(skipping: liveIDs)
+                for entry in live {
+                    self.activeTasks[entry.bookID] = entry.task
+                    self.taskToBook[entry.task.taskIdentifier] = entry.bookID
+                    if case .downloaded = self.state(for: entry.bookID) {} else {
+                        self.states[entry.bookID] = .downloading(progress: 0)
                     }
                 }
             }
@@ -492,18 +544,38 @@ final class DownloadManager {
         }
     }
 
-    /// Encoder/decoder pair for the `book.json` sidecar. Uses matching `.iso8601`
-    /// date strategies so a persisted book round-trips exactly (see the KomgaKit
-    /// `encodeDecodeBookRoundTrip` test).
+    /// Encoder/decoder pair for the `book.json` sidecar.
+    ///
+    /// Plain `.iso8601` drops fractional seconds, so `readProgress.readDate`
+    /// would lose sub-second precision across a round trip. The encoder emits
+    /// full internet date-time *with* fractional seconds; the decoder reuses
+    /// ``KomgaDateParser`` (the same parser the live API path uses), which
+    /// accepts fractional, zone-less, and zoned variants alike.
     private static let metadataEncoder: JSONEncoder = {
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        encoder.dateEncodingStrategy = .custom { @Sendable date, encoder in
+            // `ISO8601DateFormatter` is not `Sendable`; build one per call.
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            var container = encoder.singleValueContainer()
+            try container.encode(formatter.string(from: date))
+        }
         return encoder
     }()
 
     private static let metadataDecoder: JSONDecoder = {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .custom { @Sendable decoder in
+            let container = try decoder.singleValueContainer()
+            let raw = try container.decode(String.self)
+            guard let date = KomgaDateParser.parse(raw) else {
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Unrecognized date-time: \(raw)"
+                )
+            }
+            return date
+        }
         return decoder
     }()
 
@@ -590,7 +662,15 @@ private final class SessionDelegate: NSObject, URLSessionDownloadDelegate {
         // Move to a stable temp location we control before hopping actors.
         let staged = Self.stage(location)
         Task { @MainActor [weak manager] in
-            guard let staged else { return }
+            guard let staged else {
+                // Staging failed: notify the manager so the book leaves the
+                // `.downloading` state instead of hanging indefinitely.
+                manager?.didFailStaging(
+                    taskIdentifier: identifier,
+                    bookIDFromTask: bookIDFromTask
+                )
+                return
+            }
             manager?.didFinishDownloading(
                 taskIdentifier: identifier,
                 bookIDFromTask: bookIDFromTask,

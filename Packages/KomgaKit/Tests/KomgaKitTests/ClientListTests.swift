@@ -101,6 +101,15 @@ struct ClientErrorTests {
         }
     }
 
+    @Test("400 surfaces clientError")
+    func badRequest() async throws {
+        let harness = try MockHarness()
+        harness.stub { _ in .init(statusCode: 400) }
+        await #expect(throws: KomgaError.clientError(status: 400)) {
+            _ = try await harness.client.libraries()
+        }
+    }
+
     @Test("500 surfaces serverError")
     func serverError() async throws {
         let harness = try MockHarness()
@@ -157,13 +166,12 @@ struct ClientErrorTests {
     func decodingError() async throws {
         let harness = try MockHarness()
         harness.stub { _ in .init(data: Data("not json".utf8)) }
-        await #expect {
+        let thrown = await #expect(throws: KomgaError.self) {
             _ = try await harness.client.libraries()
-        } throws: { error in
-            guard let error = error as? KomgaError, case .decoding = error else {
-                return false
-            }
-            return true
+        }
+        guard case .decoding = try #require(thrown) else {
+            Issue.record("expected KomgaError.decoding, got \(String(describing: thrown))")
+            return
         }
     }
 }

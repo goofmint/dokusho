@@ -280,6 +280,16 @@ public struct KomgaClient: Sendable {
         let response: URLResponse
         do {
             (data, response) = try await session.data(for: request)
+        } catch let cancellation as CancellationError {
+            // Cooperative cancellation is not a transport failure; propagate it
+            // unchanged so callers can distinguish it. The retry loop only
+            // retries KomgaError, so this is never mistaken for a blip.
+            throw cancellation
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            // URLSession surfaces task cancellation as URLError.cancelled; keep
+            // it unwrapped (not KomgaError.network) so it is not retried or
+            // reported as a connectivity problem.
+            throw urlError
         } catch let urlError as URLError {
             Self.logger.error("Request failed: \(urlError.localizedDescription, privacy: .public)")
             throw KomgaError.network(urlError)
@@ -287,10 +297,18 @@ public struct KomgaClient: Sendable {
             throw KomgaError.network(URLError(.unknown))
         }
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            // Status + URL are logged in all builds; the response body may echo
+            // request details, so it is DEBUG-only.
+            #if DEBUG
             let body = String(decoding: data.prefix(500), as: UTF8.self)
             Self.logger.error(
                 "HTTP \(http.statusCode) for \(request.url?.absoluteString ?? "?", privacy: .public) body: \(body, privacy: .public)"
             )
+            #else
+            Self.logger.error(
+                "HTTP \(http.statusCode) for \(request.url?.absoluteString ?? "?", privacy: .public)"
+            )
+            #endif
         }
         try Self.validate(response)
         return data
@@ -298,6 +316,8 @@ public struct KomgaClient: Sendable {
 
     /// Logs the outgoing request URL and a masked form of the API key so
     /// authentication problems are diagnosable without leaking the secret.
+    /// This is deliberate, user-requested diagnostics and is kept in all
+    /// builds; the key is always masked, never emitted in full.
     static func logRequest(_ request: URLRequest) {
         let method = request.httpMethod ?? "GET"
         let url = request.url?.absoluteString ?? "?"

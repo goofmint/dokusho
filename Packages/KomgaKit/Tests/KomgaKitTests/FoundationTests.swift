@@ -136,8 +136,15 @@ struct ErrorMappingTests {
         #expect(KomgaError.fromStatus(503) == .serverError(status: 503))
     }
 
-    @Test("other non-2xx maps to serverError")
-    func otherStatus() {
-        #expect(KomgaError.fromStatus(418) == .serverError(status: 418))
+    @Test("other 4xx maps to clientError with status")
+    func clientError() {
+        #expect(KomgaError.fromStatus(400) == .clientError(status: 400))
+        #expect(KomgaError.fromStatus(418) == .clientError(status: 418))
+    }
+
+    @Test("3xx and out-of-range statuses map to unexpectedStatus")
+    func unexpectedStatus() {
+        #expect(KomgaError.fromStatus(302) == .unexpectedStatus(status: 302))
+        #expect(KomgaError.fromStatus(600) == .unexpectedStatus(status: 600))
     }
 }

@@ -53,6 +53,13 @@ final class ReadProgressSyncer {
     /// The most recently recorded value per book, read by the debounced send.
     @ObservationIgnored private var latest: [String: (page: Int, completed: Bool)] = [:]
 
+    /// In-flight PATCH send task per book. Each new send `await`s the previous
+    /// one for the same book before issuing its own PATCH, so concurrent updates
+    /// for a single book are serialized and cannot land out of order on the
+    /// server (which could roll progress backward). Different books stay fully
+    /// parallel. Only the newest task per book is retained.
+    @ObservationIgnored private var sendTasks: [String: Task<Void, Never>] = [:]
+
     /// Watches connectivity so queued updates flush on restore.
     @ObservationIgnored private let pathMonitor = NWPathMonitor()
     @ObservationIgnored private let monitorQueue = DispatchQueue(label: "jp.moongift.dokusho.progress-monitor")
@@ -78,6 +85,14 @@ final class ReadProgressSyncer {
     ///   - bookID: The book id.
     ///   - page: The last page read (1-based).
     ///   - completed: Whether the book is now complete (true on last page).
+    /// `updateLocalState` persists ``LocalReadingState`` synchronously on every
+    /// call, so the durable record of "where the user is" is always up to date.
+    /// The debounced network send below is purely an optimization: if it is
+    /// dropped (e.g. the app is disconnected before the 2s window elapses),
+    /// nothing durable is lost — `flushPending` and the next connect reconcile
+    /// from the persisted local state. That is why we do NOT eagerly queue every
+    /// turn into ``PendingProgress`` (doing so would race with `flushPending` on
+    /// foreground).
     func recordProgress(bookID: String, page: Int, completed: Bool) {
         updateLocalState(bookID: bookID, page: page, completed: completed)
         latest[bookID] = (page, completed)
@@ -93,7 +108,14 @@ final class ReadProgressSyncer {
             guard let self else { return }
             self.debounceTasks[bookID] = nil
             guard let value = self.latest[bookID] else { return }
-            await self.send(bookID: bookID, page: value.page, completed: value.completed)
+            // Chain this send after any still-running send for the same book so
+            // PATCHes for one book are serialized (latest-wins via `latest`).
+            let previous = self.sendTasks[bookID]
+            self.sendTasks[bookID] = Task { [weak self] in
+                await previous?.value
+                guard let self else { return }
+                await self.send(bookID: bookID, page: value.page, completed: value.completed)
+            }
         }
     }
 

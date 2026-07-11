@@ -92,6 +92,9 @@ struct ImageReaderScreen: View {
                         onSettle: handleSettle
                     )
                     .ignoresSafeArea()
+                    // Deterministic readiness marker for UI tests: present only
+                    // once the reader pager has been installed.
+                    .accessibilityIdentifier("reader.page")
                 }
 
                 hudOverlay

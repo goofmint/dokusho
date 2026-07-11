@@ -11,8 +11,14 @@ public enum KomgaError: Error, Sendable {
     case forbidden
     /// HTTP 404. The requested resource does not exist (possibly deleted).
     case notFound
+    /// A 4xx client error other than 401/403/404. The request was rejected as
+    /// malformed or otherwise unacceptable; retrying unchanged will not help.
+    case clientError(status: Int)
     /// HTTP 5xx. A server-side error occurred; retrying may succeed.
     case serverError(status: Int)
+    /// An unexpected non-2xx status (e.g. a 3xx redirect surfaced to us, or any
+    /// other code outside the ranges above).
+    case unexpectedStatus(status: Int)
     /// A transport-level failure (offline, timeout, TLS, cancellation).
     case network(URLError)
     /// The response body could not be decoded into the expected type.
@@ -36,12 +42,16 @@ extension KomgaError {
             return .forbidden
         case 404:
             return .notFound
+        case 400...499:
+            // Remaining 4xx: a client-side problem the caller can't recover
+            // from by retrying (bad request, unsupported media type, etc.).
+            return .clientError(status: status)
         case 500...599:
             return .serverError(status: status)
         default:
-            // Treat any other unexpected non-2xx status as a server error so
-            // the failure is surfaced rather than silently ignored.
-            return .serverError(status: status)
+            // 3xx and anything else non-2xx: unexpected, surfaced rather than
+            // silently ignored.
+            return .unexpectedStatus(status: status)
         }
     }
 }
@@ -54,7 +64,11 @@ extension KomgaError: Equatable {
             (.notFound, .notFound),
             (.insecureURL, .insecureURL):
             return true
+        case let (.clientError(l), .clientError(r)):
+            return l == r
         case let (.serverError(l), .serverError(r)):
+            return l == r
+        case let (.unexpectedStatus(l), .unexpectedStatus(r)):
             return l == r
         case let (.network(l), .network(r)):
             return l.code == r.code

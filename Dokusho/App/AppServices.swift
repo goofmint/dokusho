@@ -62,14 +62,20 @@ final class AppServices {
         let serverConfig = try KomgaServerConfig(baseURL: config.baseURL, apiKey: apiKey)
         let newClient = KomgaClient(config: serverConfig)
         client = newClient
-        imageLoader = makeImageLoader(client: newClient)
-        downloadManager = DownloadManager(client: newClient, modelContext: modelContext)
-        activateProgressSyncer(client: newClient)
+        activate(client: newClient)
     }
 
     /// Activates a verified client after a successful connection.
     func setConnected(client: KomgaClient) {
         self.client = client
+        activate(client: client)
+    }
+
+    /// Builds and installs the per-client services (image loader, download
+    /// manager, progress syncer) in a single place, so `restore` and
+    /// `setConnected` stay in lockstep. The `client` property is assigned by the
+    /// caller before this runs.
+    private func activate(client: KomgaClient) {
         imageLoader = makeImageLoader(client: client)
         downloadManager = DownloadManager(client: client, modelContext: modelContext)
         activateProgressSyncer(client: client)

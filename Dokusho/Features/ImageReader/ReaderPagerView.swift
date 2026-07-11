@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import os
 
 /// SwiftUI wrapper around a `UIPageViewController` that drives the image reader.
 ///
@@ -118,6 +117,18 @@ struct ReaderPagerView: UIViewControllerRepresentable {
                 let currentPage = currentSpread()?.readingOrderFirstPage ?? 1
                 let newIndex = parent.layout.spreadIndex(containing: currentPage)
                 rebuild(to: newIndex)
+                // The remap (single↔spread) can land on a different index than the
+                // HUD binding holds; push it back so the slider/page label stay in
+                // sync. Deferred to avoid mutating state during a view update, and
+                // guarded on inequality to avoid an update loop.
+                if parent.currentSpreadIndex != newIndex {
+                    let parent = parent
+                    DispatchQueue.main.async {
+                        if parent.currentSpreadIndex != newIndex {
+                            parent.currentSpreadIndex = newIndex
+                        }
+                    }
+                }
                 return
             }
             let target = clamp(parent.currentSpreadIndex)
@@ -285,10 +296,8 @@ struct ReaderPagerView: UIViewControllerRepresentable {
         private static let bottomStripFraction: CGFloat = 0.2
 
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
-            TapDebug.log("handleTap fired, pagerView=\(pager?.view != nil)")
             guard let view = pager?.view else { return }
             let location = gesture.location(in: view)
-            TapDebug.log("tap at \(location.x),\(location.y) bounds=\(view.bounds.width)x\(view.bounds.height)")
 
             // Bottom strip (full width) toggles only the progress bar, taking
             // priority over the left/right page-turn zones.

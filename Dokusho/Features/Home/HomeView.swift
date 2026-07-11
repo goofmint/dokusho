@@ -146,11 +146,16 @@ final class HomeViewModel {
             phase = .failed("サーバーに接続していません。")
             return
         }
+        let previousPhase = phase
         phase = .loading
         do {
             try await fetchAndCache(client: client)
             phase = .loaded
         } catch is CancellationError {
+            // Cancelled (view dismissed, or a newer refresh superseded this
+            // one): don't strand the view on the spinner. Restore whatever was
+            // showing before — cached content if we had it, else idle.
+            phase = previousPhase == .loading ? .idle : previousPhase
         } catch {
             phase = .failed(ErrorMessage.text(for: error))
         }
@@ -159,10 +164,14 @@ final class HomeViewModel {
     /// Fetches without a spinner, keeping cached rows if the network fails.
     private func revalidate(client: KomgaClient?) async {
         guard let client else { return }
+        let previousPhase = phase
         do {
             try await fetchAndCache(client: client)
             phase = .loaded
         } catch is CancellationError {
+            // Revalidation runs after cached rows are already shown (.loaded);
+            // restore that phase so the view is never left non-terminal.
+            phase = previousPhase == .loading ? .idle : previousPhase
         } catch {
             // Keep showing cached rows; no error view when cache is present.
             homeLogger.error("Home revalidation failed: \(error.localizedDescription, privacy: .public)")

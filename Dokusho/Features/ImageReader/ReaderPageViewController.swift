@@ -65,6 +65,9 @@ final class ReaderPageViewController: UIViewController, UIScrollViewDelegate {
             contentStack.frame = scrollView.bounds
         }
         centerContent()
+        // Keep the scrollable area matched to the (possibly zoomed) content so
+        // panning while zoomed spans the whole page rather than a stale range.
+        scrollView.contentSize = contentStack.frame.size
     }
 
     // MARK: - Setup
@@ -168,6 +171,9 @@ final class ReaderPageViewController: UIViewController, UIScrollViewDelegate {
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
         centerContent()
+        // The zoom transform changed the content's frame; resync the scrollable
+        // area so the pan range tracks the new size.
+        scrollView.contentSize = contentStack.frame.size
     }
 
     private func centerContent() {

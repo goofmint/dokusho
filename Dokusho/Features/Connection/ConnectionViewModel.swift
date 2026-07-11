@@ -55,6 +55,12 @@ final class ConnectionViewModel {
         }
 
         // Connection verified — persist and activate.
+        // Snapshot the existing key first so a persistConfig failure can restore
+        // it instead of destroying a previously working credential on a
+        // re-connect. A load failure here is treated as "no previous key" (nil):
+        // there was nothing usable to restore anyway. (`try?` flattens the
+        // optional, so both a throw and a stored-nil collapse to nil.)
+        let previousKey = try? services.credentialStore.loadAPIKey()
         do {
             try services.credentialStore.saveAPIKey(trimmedKey)
         } catch {
@@ -65,8 +71,15 @@ final class ConnectionViewModel {
         do {
             try persistConfig(url: url, modelContext: modelContext)
         } catch {
-            // Roll back the saved key so we don't leave a key without a config.
-            try? services.credentialStore.deleteAPIKey()
+            // Undo the in-memory ServerConfig delete/insert, then restore the
+            // previous key (or clear it if there was none) so a failed
+            // re-connect leaves the prior working config and credential intact.
+            modelContext.rollback()
+            if let previousKey {
+                try? services.credentialStore.saveAPIKey(previousKey)
+            } else {
+                try? services.credentialStore.deleteAPIKey()
+            }
             errorMessage = Self.message(for: error)
             return
         }
@@ -95,8 +108,12 @@ final class ConnectionViewModel {
                 return "アクセス権限がありません。"
             case .notFound:
                 return "サーバーが見つかりませんでした。URLを確認してください。"
+            case .clientError(let status):
+                return "リクエストが不正です (コード \(status))。アプリの更新が必要かもしれません。"
             case .serverError(let status):
                 return "サーバーエラーが発生しました (コード \(status))。時間をおいて再試行してください。"
+            case .unexpectedStatus(let status):
+                return "予期しない応答です (コード \(status))。"
             case .network:
                 return "サーバーに接続できません。ネットワーク接続とURLを確認してください。"
             case .decoding:

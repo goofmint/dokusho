@@ -261,24 +261,45 @@ struct SettingsView: View {
     /// clears the in-memory client. Optionally deletes downloads and/or cache per
     /// the confirmation toggles. Returns the app to the connection screen.
     private func disconnect() {
-        do {
-            if deleteDownloadsOnDisconnect, let downloadManager = services.downloadManager {
-                for record in downloadManager.allRecords() {
-                    try? downloadManager.delete(bookID: record.bookID)
-                }
-            }
-            if deleteCacheOnDisconnect, let imageLoader = services.imageLoader {
-                Task { await imageLoader.clearCache() }
-            }
+        Task { await performDisconnect() }
+    }
 
+    /// Performs the disconnect teardown. If deleting downloads (the only step
+    /// that can report a failure) throws, sets ``disconnectError`` and ABORTS
+    /// without removing the API key / `ServerConfig` / in-memory client, so the
+    /// user is not left half-disconnected with orphaned files. Always clears the
+    /// browse cache on a successful disconnect so a later, different server can
+    /// never reuse this server's cached lists.
+    @MainActor
+    private func performDisconnect() async {
+        if deleteDownloadsOnDisconnect, let downloadManager = services.downloadManager {
+            do {
+                for record in downloadManager.allRecords() {
+                    try downloadManager.delete(bookID: record.bookID)
+                }
+            } catch {
+                disconnectError = "ダウンロード済みブックの削除に失敗したため、切断を中止しました。（\(error.localizedDescription)）"
+                return
+            }
+        }
+
+        if deleteCacheOnDisconnect, let imageLoader = services.imageLoader {
+            await imageLoader.clearCache()
+        }
+
+        // Always drop the browse cache as part of teardown.
+        await BrowseCache.shared.clear()
+
+        do {
             try services.credentialStore.deleteAPIKey()
             for config in serverConfigs {
                 modelContext.delete(config)
             }
             try modelContext.save()
-            services.clearConnection()
         } catch {
-            disconnectError = error.localizedDescription
+            disconnectError = "接続情報の削除に失敗しました。（\(error.localizedDescription)）"
+            return
         }
+        services.clearConnection()
     }
 }

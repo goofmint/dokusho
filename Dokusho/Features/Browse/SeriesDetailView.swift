@@ -31,7 +31,11 @@ struct SeriesDetailView: View {
     }
 
     private func rebuildList() async {
-        try? await Task.sleep(for: .milliseconds(300))
+        // Debounce only real queries; an empty search key (first render, or the
+        // user clearing the field) should rebuild immediately.
+        if !searchKey.isEmpty {
+            try? await Task.sleep(for: .milliseconds(300))
+        }
         guard !Task.isCancelled, let client = services.client else { return }
         let seriesID = series.id
         let query = searchKey.lowercased()

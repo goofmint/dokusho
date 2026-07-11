@@ -130,8 +130,11 @@ struct DownloadsList: View {
     }
 
     private func deleteRecords(at offsets: IndexSet) {
-        for index in offsets {
-            let record = visibleRecords[index]
+        // Snapshot the target records before deleting: `visibleRecords` is a
+        // computed property that re-evaluates as each deletion mutates the
+        // underlying store, so indexing into it mid-loop would drift.
+        let targets = offsets.map { visibleRecords[$0] }
+        for record in targets {
             try? downloadManager.delete(bookID: record.bookID)
         }
     }

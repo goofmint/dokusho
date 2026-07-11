@@ -45,8 +45,12 @@ enum ErrorMessage {
             return "この操作を行う権限がありません。"
         case .notFound:
             return "サーバーから削除された可能性があります。"
+        case .clientError(let status):
+            return "リクエストが不正です (コード \(status))。アプリの更新が必要かもしれません。"
         case .serverError:
             return "サーバーでエラーが発生しました。しばらくして再試行してください。"
+        case .unexpectedStatus(let status):
+            return "予期しない応答です (コード \(status))。"
         case .network:
             return "ネットワークに接続できません。接続を確認してください。"
         case .decoding:

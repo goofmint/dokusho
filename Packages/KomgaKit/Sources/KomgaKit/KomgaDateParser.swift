@@ -7,13 +7,13 @@ import Foundation
 /// `2024-05-31T09:00:00`, `2024-05-31T09:00:00.123456`. Some fields may also
 /// carry an explicit zone (`...Z` / `...+09:00`). This parser accepts all of
 /// these; zone-less values are interpreted as UTC.
-enum KomgaDateParser {
+public enum KomgaDateParser {
     /// Parses a Komga date-time string. Returns `nil` when unrecognized.
     ///
     /// Formatters are created per call: neither `ISO8601DateFormatter` nor
     /// `DateFormatter` is `Sendable`, and this is called from a `@Sendable`
     /// decoding strategy.
-    static func parse(_ raw: String) -> Date? {
+    public static func parse(_ raw: String) -> Date? {
         let normalized = clampFraction(raw)
 
         // Zone-suffixed ISO-8601 first.

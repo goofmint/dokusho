@@ -59,6 +59,14 @@ actor PageImageLoader {
     /// network round-trip. Covers both pages and thumbnails.
     private var inFlight: [String: Task<UIImage, Error>] = [:]
 
+    /// Cumulative on-disk byte total per cache directory (keyed by directory
+    /// path), so `evictIfNeeded` does not re-scan the whole directory on every
+    /// write. Lazily seeded by a single `directorySize` scan per directory on
+    /// first use, incremented by the bytes written in `store`, and decremented
+    /// only when an eviction `removeItem` actually succeeds. Reset to 0 in
+    /// `clearCache`.
+    private var directoryByteCounts: [String: Int] = [:]
+
     private let fileManager = FileManager.default
     private let logger = Logger(subsystem: "jp.moongift.dokusho", category: "PageImageLoader")
 
@@ -190,6 +198,9 @@ actor PageImageLoader {
         try? fileManager.removeItem(at: thumbnailCacheDirectory)
         try? fileManager.createDirectory(at: pageCacheDirectory, withIntermediateDirectories: true)
         try? fileManager.createDirectory(at: thumbnailCacheDirectory, withIntermediateDirectories: true)
+        // Both directories are now empty; reset their cumulative counters.
+        directoryByteCounts[pageCacheDirectory.path] = 0
+        directoryByteCounts[thumbnailCacheDirectory.path] = 0
     }
 
     /// Purges the in-memory caches in response to a memory-pressure signal.
@@ -312,6 +323,10 @@ actor PageImageLoader {
     // MARK: - Disk maintenance
 
     /// Writes bytes to disk, then evicts least-recently-used files if over budget.
+    ///
+    /// Only ever called on a disk miss (the load path fetches from the network
+    /// only when `fileURL` had no bytes), so this never overwrites an existing
+    /// file and the counter increment cannot double-count.
     private func store(data: Data, at fileURL: URL, directory: URL, diskLimit: Int) {
         do {
             try data.write(to: fileURL, options: .atomic)
@@ -320,10 +335,24 @@ actor PageImageLoader {
             var mutableURL = fileURL
             try? mutableURL.setResourceValues(resourceValues)
         } catch {
+            // Write failed: leave the cumulative counter untouched.
             logger.error("Failed to write cache file: \(error.localizedDescription, privacy: .public)")
             return
         }
+        // Increment the cumulative counter (seeded lazily on first use).
+        directoryByteCounts[directory.path] = currentSize(of: directory) + data.count
         evictIfNeeded(directory: directory, limit: diskLimit)
+    }
+
+    /// The cumulative byte total for a cache directory, seeded once by a full
+    /// directory scan on first use and maintained incrementally thereafter.
+    private func currentSize(of directory: URL) -> Int {
+        if let size = directoryByteCounts[directory.path] {
+            return size
+        }
+        let size = directorySize(directory)
+        directoryByteCounts[directory.path] = size
+        return size
     }
 
     /// Updates a file's modification date so LRU treats it as recently used.
@@ -333,7 +362,16 @@ actor PageImageLoader {
 
     /// Enforces the byte budget for a cache directory by removing the oldest
     /// files (by modification date) until under the limit.
+    ///
+    /// Consults the cumulative counter first and only enumerates the directory
+    /// (to establish LRU ordering) when it is actually over budget, so the
+    /// common in-budget case avoids a full scan. The counter is the authoritative
+    /// running total: it is decremented only for files that are successfully
+    /// removed, and written back at the end.
     private func evictIfNeeded(directory: URL, limit: Int) {
+        var total = currentSize(of: directory)
+        guard total > limit else { return }
+
         let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
         guard let files = try? fileManager.contentsOfDirectory(
             at: directory,
@@ -341,23 +379,27 @@ actor PageImageLoader {
         ) else { return }
 
         var entries: [(url: URL, date: Date, size: Int)] = []
-        var total = 0
         for url in files {
             guard let values = try? url.resourceValues(forKeys: Set(keys)),
                   let size = values.fileSize else { continue }
             let date = values.contentModificationDate ?? .distantPast
             entries.append((url, date, size))
-            total += size
         }
 
-        guard total > limit else { return }
         // Oldest first.
         entries.sort { $0.date < $1.date }
         for entry in entries {
             guard total > limit else { break }
-            try? fileManager.removeItem(at: entry.url)
-            total -= entry.size
+            do {
+                try fileManager.removeItem(at: entry.url)
+                total -= entry.size
+            } catch {
+                // Could not remove this file: leave the total intact and try
+                // the next candidate rather than corrupting the counter.
+                continue
+            }
         }
+        directoryByteCounts[directory.path] = total
     }
 
     /// Sums the byte sizes of all files in a directory.

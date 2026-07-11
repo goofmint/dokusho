@@ -46,11 +46,10 @@ struct BookDetailView: View {
         }
         .navigationTitle(displayTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: initialBook.id) {
-            await refreshBook()
-        }
         .onAppear {
-            // Re-fetch when returning from the reader so progress is current.
+            // Fires on first appearance AND when the pushed reader pops back
+            // (unlike `.task(id:)`, which does not re-fire on pop), so read
+            // progress is refreshed after reading.
             Task { await refreshBook() }
         }
     }
@@ -99,9 +98,7 @@ struct BookDetailView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-            }
 
-            if isSupported {
                 downloadRow
             }
 

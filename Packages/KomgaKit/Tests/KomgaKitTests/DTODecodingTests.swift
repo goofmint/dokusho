@@ -97,16 +97,35 @@ struct DTODecodingTests {
     func encodeDecodeBookRoundTrip() throws {
         let original = try decoder.decode(KomgaBook.self, from: Fixture.data("book"))
 
-        // The offline persistence layer uses matching `.iso8601` strategies on a
-        // plain encoder/decoder pair, so mirror that here.
+        // Mirror the app's metadata persistence contract: encode dates as
+        // ISO-8601 *with fractional seconds*, and decode them back through the
+        // shared Komga date parser. This exercises sub-second precision, which
+        // the plain `.iso8601` strategy silently drops.
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            var container = encoder.singleValueContainer()
+            try container.encode(formatter.string(from: date))
+        }
         let roundTripDecoder = JSONDecoder()
-        roundTripDecoder.dateDecodingStrategy = .iso8601
+        roundTripDecoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let string = try container.decode(String.self)
+            guard let date = KomgaDateParser.parse(string) else {
+                throw DecodingError.dataCorruptedError(
+                    in: container, debugDescription: "bad date \(string)"
+                )
+            }
+            return date
+        }
 
         let data = try encoder.encode(original)
         let restored = try roundTripDecoder.decode(KomgaBook.self, from: data)
         #expect(restored == original)
+        // Full equality above already covers readDate; assert it explicitly to
+        // pin the sub-second-precision contract this test exists to guard.
+        #expect(restored.readProgress?.readDate == original.readProgress?.readDate)
     }
 
     @Test("Book without read progress decodes readProgress as nil")
@@ -197,7 +216,7 @@ struct KomgaDateParserTests {
         let harness = try MockHarness()
         let json = try String(decoding: Fixture.data("book"), as: UTF8.self)
             .replacingOccurrences(
-                of: "\"readDate\": \"2024-06-10T18:22:00.000Z\"",
+                of: "\"readDate\": \"2024-06-10T18:22:00.123Z\"",
                 with: "\"readDate\": \"2024-06-10T18:22:00.123456\""
             )
         harness.stub { _ in .init(data: Data(json.utf8)) }
