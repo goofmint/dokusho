@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 @main
 struct DokushoApp: App {
@@ -43,7 +44,22 @@ struct DokushoApp: App {
                         // debounce window; push it before we're suspended. Use
                         // `.background` (not `.inactive`) to avoid double-firing
                         // on transient inactive states like Control Center.
-                        Task { await syncer.flushOutstanding() }
+                        // Wrap the flush in a background task so the OS grants
+                        // time to finish the PATCH before suspending; always
+                        // end it (on completion and on expiration).
+                        let app = UIApplication.shared
+                        Task { @MainActor in
+                            var taskID = UIBackgroundTaskIdentifier.invalid
+                            taskID = app.beginBackgroundTask(withName: "flush-read-progress") {
+                                app.endBackgroundTask(taskID)
+                                taskID = .invalid
+                            }
+                            await syncer.flushOutstanding()
+                            if taskID != .invalid {
+                                app.endBackgroundTask(taskID)
+                                taskID = .invalid
+                            }
+                        }
                     case .inactive:
                         break
                     @unknown default:

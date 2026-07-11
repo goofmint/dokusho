@@ -129,6 +129,13 @@ final class HomeViewModel {
     private let keepReadingKey = "home-keepreading"
     private let onDeckKey = "home-ondeck"
 
+    /// Guards against overlapping silent revalidations. `.onAppear` can fire in
+    /// quick succession (and alongside the cache-hit revalidate in
+    /// `loadIfNeeded`); a second revalidate while one is in flight would race
+    /// the same row/cache writes. Single-flight on the main actor: the
+    /// check-and-set has no `await` between them.
+    @ObservationIgnored private var isRevalidating = false
+
     /// On first appear, show the cached rows immediately, then revalidate over
     /// the network (replacing the rows and refreshing the cache on success;
     /// keeping cached data on failure).
@@ -181,6 +188,10 @@ final class HomeViewModel {
     /// Fetches without a spinner, keeping cached rows if the network fails.
     private func revalidate(client: KomgaClient?) async {
         guard let client else { return }
+        // Single-flight: skip if a revalidation is already running.
+        guard !isRevalidating else { return }
+        isRevalidating = true
+        defer { isRevalidating = false }
         let previousPhase = phase
         do {
             try await fetchAndCache(client: client)
