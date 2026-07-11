@@ -229,7 +229,12 @@ final class HomeViewModel {
         guard generation == fetchGeneration else { return }
         keepReading = keepPage.content
         onDeck = deckPage.content
+        // Recheck before each disk write: a newer fetch can complete during a
+        // save's `await`, so re-verify we're still latest to avoid persisting a
+        // mixed-generation cache (keep from one fetch, on-deck from another).
+        guard generation == fetchGeneration else { return }
         await cache.save(keepPage.content, key: keepReadingKey)
+        guard generation == fetchGeneration else { return }
         await cache.save(deckPage.content, key: onDeckKey)
     }
 }
