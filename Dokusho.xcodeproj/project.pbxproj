@@ -13,8 +13,19 @@
 		AA0000000000000000000034 /* ReadiumNavigator in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000035 /* ReadiumNavigator */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		AA00000000000000000000B3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA00000000000000000000AA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA00000000000000000000B0;
+			remoteInfo = Dokusho;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		AA00000000000000000000A0 /* Dokusho.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Dokusho.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA00000000000000000000A1 /* DokushoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DokushoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA00000000000000000000E1 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
 		AA00000000000000000000E2 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		AA00000000000000000000E3 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
@@ -23,6 +34,7 @@
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AA0000000000000000000001 /* Dokusho */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Dokusho; sourceTree = "<group>"; };
+		AA0000000000000000000002 /* DokushoUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = DokushoUITests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -37,6 +49,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA00000000000000000000C4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -44,6 +63,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000001 /* Dokusho */,
+				AA0000000000000000000002 /* DokushoUITests */,
 				AA00000000000000000000D2 /* Configs */,
 				AA00000000000000000000D3 /* Packages */,
 				AA00000000000000000000D1 /* Products */,
@@ -54,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				AA00000000000000000000A0 /* Dokusho.app */,
+				AA00000000000000000000A1 /* DokushoUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -105,6 +126,28 @@
 			productReference = AA00000000000000000000A0 /* Dokusho.app */;
 			productType = "com.apple.product-type.application";
 		};
+		AA00000000000000000000B1 /* DokushoUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA00000000000000000000F1 /* Build configuration list for PBXNativeTarget "DokushoUITests" */;
+			buildPhases = (
+				AA00000000000000000000C3 /* Sources */,
+				AA00000000000000000000C4 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AA00000000000000000000B2 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AA0000000000000000000002 /* DokushoUITests */,
+			);
+			name = DokushoUITests;
+			packageProductDependencies = (
+			);
+			productName = DokushoUITests;
+			productReference = AA00000000000000000000A1 /* DokushoUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -117,6 +160,10 @@
 				TargetAttributes = {
 					AA00000000000000000000B0 = {
 						CreatedOnToolsVersion = 26.6;
+					};
+					AA00000000000000000000B1 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = AA00000000000000000000B0;
 					};
 				};
 			};
@@ -139,6 +186,7 @@
 			projectRoot = "";
 			targets = (
 				AA00000000000000000000B0 /* Dokusho */,
+				AA00000000000000000000B1 /* DokushoUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -161,7 +209,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA00000000000000000000C3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AA00000000000000000000B2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA00000000000000000000B0 /* Dokusho */;
+			targetProxy = AA00000000000000000000B3 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		AA0000000000000000000100 /* Debug */ = {
@@ -210,6 +273,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YX944FB478;
 				MARKETING_VERSION = 0.1.0;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
@@ -221,8 +285,45 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YX944FB478;
 				MARKETING_VERSION = 0.1.0;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+		AA0000000000000000000120 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = jp.moongift.dokusho.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Dokusho;
+			};
+			name = Debug;
+		};
+		AA0000000000000000000121 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = jp.moongift.dokusho.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Dokusho;
 			};
 			name = Release;
 		};
@@ -243,6 +344,15 @@
 			buildConfigurations = (
 				AA0000000000000000000110 /* Debug */,
 				AA0000000000000000000111 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA00000000000000000000F1 /* Build configuration list for PBXNativeTarget "DokushoUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000000000000000000120 /* Debug */,
+				AA0000000000000000000121 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -143,6 +143,7 @@ struct ImageReaderScreen: View {
                     .padding(10)
                     .background(.ultraThinMaterial, in: Circle())
             }
+            .accessibilityLabel("閉じる")
             Spacer()
             Text(bookTitle)
                 .font(.headline)

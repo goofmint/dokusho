@@ -22,7 +22,7 @@ struct DokushoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            rootView
                 .environment(services)
                 .onAppear {
                     appDelegate.downloadManager = services.downloadManager
@@ -40,5 +40,19 @@ struct DokushoApp: App {
                 }
         }
         .modelContainer(modelContainer)
+    }
+
+    /// DEBUG builds can bypass the connection flow to test the reader directly.
+    @ViewBuilder
+    private var rootView: some View {
+        #if DEBUG
+        if CommandLine.arguments.contains("-debugPdfReader") {
+            DebugReaderHarness()
+        } else {
+            ContentView()
+        }
+        #else
+        ContentView()
+        #endif
     }
 }

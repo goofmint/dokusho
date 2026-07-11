@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import os
 
 /// SwiftUI wrapper around a `UIPageViewController` that drives the image reader.
 ///
@@ -284,8 +285,10 @@ struct ReaderPagerView: UIViewControllerRepresentable {
         private static let bottomStripFraction: CGFloat = 0.2
 
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
+            TapDebug.log("handleTap fired, pagerView=\(pager?.view != nil)")
             guard let view = pager?.view else { return }
             let location = gesture.location(in: view)
+            TapDebug.log("tap at \(location.x),\(location.y) bounds=\(view.bounds.width)x\(view.bounds.height)")
 
             // Bottom strip (full width) toggles only the progress bar, taking
             // priority over the left/right page-turn zones.
