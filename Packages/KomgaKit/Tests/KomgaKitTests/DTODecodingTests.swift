@@ -1,0 +1,226 @@
+import Foundation
+import Testing
+
+@testable import KomgaKit
+
+/// Uses the client's actual date parser so fixtures decode the same way they
+/// would from the live client (no duplicated strategy that can drift).
+private func makeDecoder() -> JSONDecoder {
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .custom { decoder in
+        let container = try decoder.singleValueContainer()
+        let string = try container.decode(String.self)
+        if let date = KomgaDateParser.parse(string) { return date }
+        throw DecodingError.dataCorruptedError(
+            in: container, debugDescription: "bad date \(string)"
+        )
+    }
+    return decoder
+}
+
+@Suite("DTO decoding")
+struct DTODecodingTests {
+    let decoder = makeDecoder()
+
+    @Test("KomgaUser decodes")
+    func decodeUser() throws {
+        let user = try decoder.decode(KomgaUser.self, from: Fixture.data("user"))
+        #expect(user.id == "0ABCUSER01")
+        #expect(user.email == "reader@example.com")
+        #expect(user.roles.contains("FILE_DOWNLOAD"))
+    }
+
+    @Test("Library array decodes, including unavailable flag")
+    func decodeLibraries() throws {
+        let libs = try decoder.decode([KomgaLibrary].self, from: Fixture.data("libraries"))
+        #expect(libs.count == 2)
+        #expect(libs[0].name == "Manga")
+        #expect(libs[0].unavailable == false)
+        #expect(libs[1].unavailable == true)
+    }
+
+    @Test("Series page decodes with reading direction")
+    func decodeSeriesPage() throws {
+        let page = try decoder.decode(
+            Page<KomgaSeries>.self, from: Fixture.data("series_page")
+        )
+        #expect(page.content.count == 2)
+        #expect(page.totalElements == 42)
+        #expect(page.totalPages == 3)
+        #expect(page.number == 0)
+        #expect(page.first == true)
+        #expect(page.last == false)
+
+        let first = page.content[0]
+        #expect(first.name == "Yotsuba&!")
+        #expect(first.metadata.readingDirection == .rightToLeft)
+        #expect(first.metadata.readingDirectionRaw == "RIGHT_TO_LEFT")
+        #expect(first.booksInProgressCount == 1)
+
+        let second = page.content[1]
+        #expect(second.metadata.readingDirection == .leftToRight)
+    }
+
+    @Test("Series page round-trips through Codable for the browse cache")
+    func encodeDecodeSeriesPageRoundTrip() throws {
+        let original = try decoder.decode(
+            Page<KomgaSeries>.self, from: Fixture.data("series_page")
+        )
+        // The browse cache persists these with a plain encoder/decoder pair
+        // (no dates in this tree), so mirror that here.
+        let data = try JSONEncoder().encode(original)
+        let restored = try JSONDecoder().decode(Page<KomgaSeries>.self, from: data)
+        #expect(restored.content == original.content)
+        #expect(restored.number == original.number)
+        #expect(restored.totalElements == original.totalElements)
+        #expect(restored.last == original.last)
+        // The derived raw reading-direction survives the round-trip.
+        #expect(restored.content[0].metadata.readingDirection == .rightToLeft)
+        #expect(restored.content[0].metadata.readingDirectionRaw == "RIGHT_TO_LEFT")
+    }
+
+    @Test("Book decodes with media profile, page count, and read progress")
+    func decodeBook() throws {
+        let book = try decoder.decode(KomgaBook.self, from: Fixture.data("book"))
+        #expect(book.id == "0BOOK0001")
+        #expect(book.media.mediaProfile == "PDF")
+        #expect(book.media.pagesCount == 180)
+        #expect(book.metadata.authors.count == 2)
+        #expect(book.metadata.authors.first?.name == "Kiyohiko Azuma")
+        let progress = try #require(book.readProgress)
+        #expect(progress.page == 42)
+        #expect(progress.completed == false)
+        #expect(book.sizeBytes == 104_857_600)
+    }
+
+    @Test("Book round-trips through Codable for offline persistence")
+    func encodeDecodeBookRoundTrip() throws {
+        let original = try decoder.decode(KomgaBook.self, from: Fixture.data("book"))
+
+        // Mirror the app's metadata persistence contract: encode dates as
+        // ISO-8601 *with fractional seconds*, and decode them back through the
+        // shared Komga date parser. This exercises sub-second precision, which
+        // the plain `.iso8601` strategy silently drops.
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            var container = encoder.singleValueContainer()
+            try container.encode(formatter.string(from: date))
+        }
+        let roundTripDecoder = JSONDecoder()
+        roundTripDecoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let string = try container.decode(String.self)
+            guard let date = KomgaDateParser.parse(string) else {
+                throw DecodingError.dataCorruptedError(
+                    in: container, debugDescription: "bad date \(string)"
+                )
+            }
+            return date
+        }
+
+        let data = try encoder.encode(original)
+        let restored = try roundTripDecoder.decode(KomgaBook.self, from: data)
+        #expect(restored == original)
+        // Full equality above already covers readDate; assert it explicitly to
+        // pin the sub-second-precision contract this test exists to guard.
+        #expect(restored.readProgress?.readDate == original.readProgress?.readDate)
+    }
+
+    @Test("Book without read progress decodes readProgress as nil")
+    func decodeBooksPageMixedProgress() throws {
+        let page = try decoder.decode(
+            Page<KomgaBook>.self, from: Fixture.data("books_page")
+        )
+        #expect(page.content.count == 2)
+        #expect(page.content[0].readProgress != nil)
+        #expect(page.content[1].readProgress == nil)
+        #expect(page.content[1].media.mediaProfile == "EPUB")
+    }
+
+    @Test("Page list decodes with optional dimensions")
+    func decodePages() throws {
+        let pages = try decoder.decode([KomgaPage].self, from: Fixture.data("pages"))
+        #expect(pages.count == 2)
+        #expect(pages[0].number == 1)
+        #expect(pages[0].width == 1200)
+        #expect(pages[0].height == 1800)
+        #expect(pages[1].width == nil)
+        #expect(pages[1].mediaType == "image/webp")
+    }
+
+    @Test("Collections page decodes")
+    func decodeCollections() throws {
+        let page = try decoder.decode(
+            Page<KomgaCollection>.self, from: Fixture.data("collections_page")
+        )
+        let collection = try #require(page.content.first)
+        #expect(collection.name == "Best of 2024")
+        #expect(collection.ordered == true)
+        #expect(collection.seriesIds == ["0SERIES01", "0SERIES02"])
+    }
+
+    @Test("Read lists page decodes")
+    func decodeReadLists() throws {
+        let page = try decoder.decode(
+            Page<KomgaReadList>.self, from: Fixture.data("readlists_page")
+        )
+        let list = try #require(page.content.first)
+        #expect(list.name == "Crossover Event")
+        #expect(list.bookIds == ["0BOOK0001", "0BOOK0002"])
+        #expect(list.summary == "Reading order for the crossover.")
+    }
+
+    @Test("Unknown reading direction is preserved")
+    func unknownReadingDirection() {
+        let direction = KomgaReadingDirection(rawValue: "DIAGONAL")
+        #expect(direction == .unknown("DIAGONAL"))
+    }
+}
+
+/// Komga serializes `LocalDateTime` without a timezone and with a
+/// variable-length fraction; the parser must accept all observed shapes.
+@Suite("Komga date parsing")
+struct KomgaDateParserTests {
+    @Test(
+        "Accepted formats",
+        arguments: [
+            "2024-05-31T09:00:00",             // zone-less LocalDateTime (Komga default)
+            "2024-05-31T09:00:00.1",           // short fraction
+            "2024-05-31T09:00:00.123456",      // micro/nano fraction
+            "2024-05-31T09:00:00Z",            // zoned
+            "2024-05-31T09:00:00.123Z",        // zoned with millis
+            "2024-05-31T09:00:00+09:00",       // offset
+        ]
+    )
+    func accepted(string: String) {
+        #expect(KomgaDateParser.parse(string) != nil)
+    }
+
+    @Test("Zone-less values are interpreted as UTC")
+    func zoneLessIsUTC() throws {
+        let zoneLess = try #require(KomgaDateParser.parse("2024-05-31T09:00:00"))
+        let zoned = try #require(KomgaDateParser.parse("2024-05-31T09:00:00Z"))
+        #expect(zoneLess == zoned)
+    }
+
+    @Test("Garbage is rejected")
+    func rejected() {
+        #expect(KomgaDateParser.parse("31/05/2024 09:00") == nil)
+        #expect(KomgaDateParser.parse("") == nil)
+    }
+
+    @Test("Book with zone-less readProgress date decodes via client strategy")
+    func zoneLessReadProgress() async throws {
+        let harness = try MockHarness()
+        let json = try String(decoding: Fixture.data("book"), as: UTF8.self)
+            .replacingOccurrences(
+                of: "\"readDate\": \"2024-06-10T18:22:00.123Z\"",
+                with: "\"readDate\": \"2024-06-10T18:22:00.123456\""
+            )
+        harness.stub { _ in .init(data: Data(json.utf8)) }
+        let book = try await harness.client.book(id: "0BOOK0001")
+        #expect(book.readProgress?.readDate != nil)
+    }
+}

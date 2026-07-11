@@ -1,0 +1,60 @@
+{
+  "id": "0BOOK0001",
+  "seriesId": "0SERIES01",
+  "seriesTitle": "Yotsuba&!",
+  "libraryId": "0LIB0001",
+  "name": "Yotsuba&! Volume 1",
+  "url": "/data/manga/yotsuba/v01.pdf",
+  "number": 1,
+  "created": "2024-01-02T10:00:00Z",
+  "lastModified": "2024-06-01T12:30:45.500Z",
+  "fileLastModified": "2024-05-31T09:00:00Z",
+  "sizeBytes": 104857600,
+  "size": "100 MiB",
+  "media": {
+    "status": "READY",
+    "mediaType": "application/pdf",
+    "pagesCount": 180,
+    "comment": "",
+    "mediaProfile": "PDF",
+    "epubDivinaCompatible": false,
+    "epubIsKepub": false
+  },
+  "metadata": {
+    "title": "Volume 1",
+    "titleLock": false,
+    "summary": "Yotsuba moves to a new town.",
+    "summaryLock": false,
+    "number": "1",
+    "numberLock": false,
+    "numberSort": 1.0,
+    "numberSortLock": false,
+    "releaseDate": "2003-08-27",
+    "releaseDateLock": false,
+    "authors": [
+      { "name": "Kiyohiko Azuma", "role": "writer" },
+      { "name": "Kiyohiko Azuma", "role": "penciller" }
+    ],
+    "authorsLock": false,
+    "tags": ["comedy"],
+    "tagsLock": false,
+    "isbn": "9784840228015",
+    "isbnLock": false,
+    "links": [],
+    "linksLock": false,
+    "created": "2024-01-02T10:00:00Z",
+    "lastModified": "2024-06-01T12:30:45.500Z"
+  },
+  "readProgress": {
+    "page": 42,
+    "completed": false,
+    "readDate": "2024-06-10T18:22:00.123Z",
+    "created": "2024-06-01T10:00:00Z",
+    "lastModified": "2024-06-10T18:22:00Z",
+    "deviceId": "device-1",
+    "deviceName": "iPhone"
+  },
+  "deleted": false,
+  "fileHash": "abc123",
+  "oneshot": false
+}

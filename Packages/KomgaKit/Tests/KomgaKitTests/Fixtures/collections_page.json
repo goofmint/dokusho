@@ -1,0 +1,30 @@
+{
+  "content": [
+    {
+      "id": "0COLL0001",
+      "name": "Best of 2024",
+      "ordered": true,
+      "seriesIds": ["0SERIES01", "0SERIES02"],
+      "createdDate": "2024-03-01T10:00:00Z",
+      "lastModifiedDate": "2024-06-01T12:30:45.100Z",
+      "filtered": false
+    }
+  ],
+  "pageable": {
+    "pageNumber": 0,
+    "pageSize": 20,
+    "sort": { "empty": true, "sorted": false, "unsorted": true },
+    "offset": 0,
+    "paged": true,
+    "unpaged": false
+  },
+  "totalPages": 1,
+  "totalElements": 1,
+  "last": true,
+  "size": 20,
+  "number": 0,
+  "sort": { "empty": true, "sorted": false, "unsorted": true },
+  "first": true,
+  "numberOfElements": 1,
+  "empty": false
+}
