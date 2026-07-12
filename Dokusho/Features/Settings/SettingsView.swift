@@ -239,15 +239,20 @@ struct SettingsView: View {
     /// When the running binary was built, so "which build is on this device?"
     /// is answerable at a glance (the version string alone doesn't change
     /// between development builds).
+    ///
+    /// Reads `DokushoBuildDate` (epoch seconds), stamped into Info.plist by
+    /// the "Stamp Build Date" build phase — deterministic at build time,
+    /// unlike the executable's file timestamp, which incremental builds and
+    /// install paths can leave stale or rewrite.
     private var buildDateString: String {
         guard
-            let url = Bundle.main.executableURL,
-            let date = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
-                .contentModificationDate
+            let raw = Bundle.main.object(forInfoDictionaryKey: "DokushoBuildDate") as? String,
+            let epoch = TimeInterval(raw)
         else {
             return "-"
         }
-        return date.formatted(date: .abbreviated, time: .shortened)
+        return Date(timeIntervalSince1970: epoch)
+            .formatted(date: .abbreviated, time: .shortened)
     }
 
     // MARK: - Actions
