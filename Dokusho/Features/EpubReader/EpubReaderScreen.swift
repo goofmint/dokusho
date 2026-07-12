@@ -39,8 +39,18 @@ struct EpubReaderScreen: View {
     }
 
     var body: some View {
-        ZStack {
-            content
+        GeometryReader { proxy in
+            ZStack {
+                content
+            }
+            // Drive the spread/column preference by orientation so landscape
+            // always shows a two-page spread / two columns (on every device),
+            // portrait a single page. Set before the navigator loads and on
+            // every rotation.
+            .onAppear { viewModel.setLandscape(proxy.size.width > proxy.size.height) }
+            .onChange(of: proxy.size) { _, newValue in
+                viewModel.setLandscape(newValue.width > newValue.height)
+            }
         }
         .task {
             await viewModel.load()
