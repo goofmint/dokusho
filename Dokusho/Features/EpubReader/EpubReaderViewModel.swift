@@ -210,8 +210,19 @@ final class EpubReaderViewModel {
     }
 
     private func makePreferences() -> EPUBPreferences {
-        // テーマはシステムのライト/ダークに追従（View 側から setColorScheme で更新）。
-        EPUBPreferences(fontSize: fontSizeMultiplier, theme: currentTheme)
+        EPUBPreferences(
+            // リフロー型: 画面が広ければ 2 カラム表示（横向きで画面幅を活かし、
+            // 1 カラムのままだと本文が狭く小さく見える問題を解消する）。
+            columnCount: .auto,
+            fontSize: fontSizeMultiplier,
+            // 見開き時は表紙（1 ページ目）を単独表示（画像リーダーと同じ挙動）。
+            offsetFirstPage: true,
+            // 固定レイアウト型（マンガ等）: 画面が広ければ見開き（2 ページ）表示。
+            // 横向きで 1 ページが中央に小さく表示される問題もこれで解消する。
+            spread: .auto,
+            // テーマはシステムのライト/ダークに追従（View 側から setColorScheme で更新）。
+            theme: currentTheme
+        )
     }
 
     private var currentTheme: Theme = .light
