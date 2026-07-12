@@ -1,31 +1,53 @@
 import XCTest
+
+/// Manual visual verification against demo/demo.epub (skipped when absent).
+/// Live-rotates while reading, verifying each rotation via the window frame.
 final class EpubSpreadCheck: XCTestCase {
-    func testDemoEpubPortraitAndLandscape() throws {
+    func testLiveRotationCycle() throws {
         let epubPath = "/Users/nakatsugawa/Code/MOONGIFT/dokusho/demo/demo.epub"
-        try XCTSkipUnless(
-            FileManager.default.fileExists(atPath: epubPath),
-            "demo/demo.epub がある環境でのみ実行する手動検証テスト"
-        )
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: epubPath))
+
+        XCUIDevice.shared.orientation = .portrait
+        sleep(2)
         let app = XCUIApplication()
         app.launchArguments = ["-debugEpubReader"]
         app.launchEnvironment["EPUB_PATH"] = epubPath
         app.launchEnvironment["EPUB_PAGE"] = "3"
         app.launch()
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 15))
-        XCUIDevice.shared.orientation = .portrait
-        sleep(10) // 45MB epub: allow detection + first page render
-        add(shot("demo-portrait"))
-        // Advance a few pages so the landscape spread shows a real page pair.
-        let center = app.windows.firstMatch
-        center.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.4)).tap()
-        sleep(1)
-        center.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.4)).tap()
-        sleep(2)
+        sleep(8)
+        try assertOrientation(app, portrait: true)
+        add(shot("live-1-portrait"))
+
         XCUIDevice.shared.orientation = .landscapeLeft
-        sleep(6)
-        add(shot("demo-landscape"))
+        try waitOrientation(app, portrait: false)
+        sleep(4)
+        add(shot("live-2-landscape"))
+
+        XCUIDevice.shared.orientation = .portrait
+        try waitOrientation(app, portrait: true)
+        sleep(4)
+        add(shot("live-3-portrait-again"))
     }
+
+    private func assertOrientation(_ app: XCUIApplication, portrait: Bool) throws {
+        let frame = app.windows.firstMatch.frame
+        XCTAssertEqual(frame.width < frame.height, portrait, "向きが想定外: \(frame)")
+    }
+
+    private func waitOrientation(_ app: XCUIApplication, portrait: Bool) throws {
+        for _ in 0..<20 {
+            let frame = app.windows.firstMatch.frame
+            if (frame.width < frame.height) == portrait { return }
+            usleep(500_000)
+        }
+        XCTFail("回転が反映されない: expectPortrait=\(portrait) frame=\(app.windows.firstMatch.frame)")
+    }
+
     private func shot(_ n: String) -> XCTAttachment {
-        let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); a.name = n; a.lifetime = .keepAlways; return a
+        let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        a.name = n
+        a.lifetime = .keepAlways
+        return a
     }
 }
