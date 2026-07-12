@@ -3,8 +3,24 @@ import XCTest
 /// Manual visual verification against demo/demo.epub (skipped when absent).
 /// Live-rotates while reading, verifying each rotation via the window frame.
 final class EpubSpreadCheck: XCTestCase {
+    /// Path of the verification ePub. The book is copyrighted, so it cannot be
+    /// bundled as a test resource; it is resolved portably instead:
+    /// 1. an `EPUB_PATH` environment variable on the test runner, when set;
+    /// 2. otherwise `demo/demo.epub` relative to the repository root, derived
+    ///    from this file's compile-time `#filePath`.
+    private static let epubPath: String = {
+        if let override = ProcessInfo.processInfo.environment["EPUB_PATH"], !override.isEmpty {
+            return override
+        }
+        return URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // DokushoUITests/
+            .deletingLastPathComponent() // repository root
+            .appendingPathComponent("demo/demo.epub")
+            .path
+    }()
+
     func testLiveRotationCycle() throws {
-        let epubPath = "/Users/nakatsugawa/Code/MOONGIFT/dokusho/demo/demo.epub"
+        let epubPath = Self.epubPath
         try XCTSkipUnless(FileManager.default.fileExists(atPath: epubPath))
 
         XCUIDevice.shared.orientation = .portrait
