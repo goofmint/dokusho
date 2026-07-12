@@ -218,6 +218,7 @@ struct SettingsView: View {
     private var appInfoSection: some View {
         Section("アプリ情報") {
             LabeledContent("バージョン", value: appVersionString)
+            LabeledContent("ビルド日時", value: buildDateString)
         }
     }
 
@@ -233,6 +234,25 @@ struct SettingsView: View {
         case let (nil, build?): return build
         case (nil, nil): return "-"
         }
+    }
+
+    /// When the running binary was built, so "which build is on this device?"
+    /// is answerable at a glance (the version string alone doesn't change
+    /// between development builds).
+    ///
+    /// Reads `DokushoBuildDate` (epoch seconds), stamped into Info.plist by
+    /// the "Stamp Build Date" build phase — deterministic at build time,
+    /// unlike the executable's file timestamp, which incremental builds and
+    /// install paths can leave stale or rewrite.
+    private var buildDateString: String {
+        guard
+            let raw = Bundle.main.object(forInfoDictionaryKey: "DokushoBuildDate") as? String,
+            let epoch = TimeInterval(raw)
+        else {
+            return "-"
+        }
+        return Date(timeIntervalSince1970: epoch)
+            .formatted(date: .abbreviated, time: .shortened)
     }
 
     // MARK: - Actions

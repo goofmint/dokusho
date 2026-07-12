@@ -32,6 +32,10 @@ struct ImageReaderScreen: View {
     /// `nil` the screen resolves the resume position itself from
     /// ``LocalReadingState`` and `book.readProgress` (the streaming behavior).
     var initialPage: Int? = nil
+    /// Reading direction declared by the content itself (e.g. an ePub spine's
+    /// page-progression-direction). Beats the series lookup / default setting;
+    /// the per-book user override still wins.
+    var initialDirectionHint: ReadingProgression? = nil
     /// (1-based page, completed) — reported on each settle for progress sync.
     let onProgress: @MainActor (Int, Bool) -> Void
 
@@ -270,10 +274,12 @@ struct ImageReaderScreen: View {
     private func resolveInitialState() async {
         let localState = fetchLocalState()
 
-        // Direction: per-book override wins, else series metadata, else the
-        // user's default-direction setting (which itself defaults to LTR).
+        // Direction: per-book override wins, else the content's own declared
+        // direction, else series metadata, else the user's default setting.
         if let override = ReadingProgression.fromOverride(localState?.readingDirectionOverride) {
             progression = override
+        } else if let initialDirectionHint {
+            progression = initialDirectionHint
         } else if let seriesDirection = await fetchSeriesDirection() {
             progression = ReadingProgression.from(seriesDirection: seriesDirection)
         } else {

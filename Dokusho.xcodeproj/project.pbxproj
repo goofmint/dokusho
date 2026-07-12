@@ -107,6 +107,7 @@
 				AA00000000000000000000C1 /* Sources */,
 				AA00000000000000000000C0 /* Frameworks */,
 				AA00000000000000000000C2 /* Resources */,
+				AA00000000000000000000C5 /* Stamp Build Date */,
 			);
 			buildRules = (
 			);
@@ -190,6 +191,28 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		AA00000000000000000000C5 /* Stamp Build Date */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Stamp Build Date";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Writes the build moment into the built product's Info.plist so the\n# app can show exactly which build is running (the executable's file\n# timestamp is not reliable across incremental builds and installs).\nPLIST=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\nif [ -f \"$PLIST\" ]; then\n  /usr/libexec/PlistBuddy -c \"Delete :DokushoBuildDate\" \"$PLIST\" 2>/dev/null || true\n  /usr/libexec/PlistBuddy -c \"Add :DokushoBuildDate string $(date +%s)\" \"$PLIST\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
 		AA00000000000000000000C2 /* Resources */ = {

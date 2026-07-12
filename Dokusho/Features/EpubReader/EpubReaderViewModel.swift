@@ -209,9 +209,31 @@ final class EpubReaderViewModel {
         EPUBNavigatorViewController.Configuration(preferences: makePreferences())
     }
 
+    /// 現在の向き（横向きか）。プリファレンスの見開き/カラム数を決める。
+    private var isLandscape = false
+
+    /// 端末の向きを反映する。View 側の GeometryReader から呼ぶ。navigator 生成後は
+    /// preferences を再送して即座に反映する。
+    func setLandscape(_ landscape: Bool) {
+        guard landscape != isLandscape else { return }
+        isLandscape = landscape
+        applyPreferences()
+    }
+
     private func makePreferences() -> EPUBPreferences {
-        // テーマはシステムのライト/ダークに追従（View 側から setColorScheme で更新）。
-        EPUBPreferences(fontSize: fontSizeMultiplier, theme: currentTheme)
+        EPUBPreferences(
+            // 横向き = 2 カラム(リフロー) / 見開き(固定レイアウト)、縦向き = 1 カラム /
+            // 単ページ。画面サイズ依存の .auto ではなく向きで明示制御することで、
+            // iPhone の横向きでも確実に見開き/2 カラムになり、1 ページが中央に小さく
+            // 表示される問題も解消する（画像リーダーと同じ「横向き=見開き」挙動）。
+            columnCount: isLandscape ? .two : .one,
+            fontSize: fontSizeMultiplier,
+            // 見開き時は表紙(1 ページ目)を単独表示(画像リーダーと同じ挙動)。
+            offsetFirstPage: true,
+            spread: isLandscape ? .always : .never,
+            // テーマはシステムのライト/ダークに追従（View 側から setColorScheme で更新）。
+            theme: currentTheme
+        )
     }
 
     private var currentTheme: Theme = .light
