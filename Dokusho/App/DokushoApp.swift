@@ -76,6 +76,8 @@ struct DokushoApp: App {
         #if DEBUG
         if CommandLine.arguments.contains("-debugPdfReader") {
             DebugReaderHarness()
+        } else if CommandLine.arguments.contains("-debugEpubReader") {
+            DebugEpubHarness()
         } else {
             ContentView()
         }

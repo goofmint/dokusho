@@ -83,9 +83,10 @@ struct ReaderRootView: View {
     @ViewBuilder
     private var epubReader: some View {
         if let fileURL = services.downloadManager?.localURL(for: book.id) {
-            EpubReaderScreen(
+            EpubReaderContainer(
                 book: book,
                 fileURL: fileURL,
+                client: services.client,
                 initialPage: effectiveResumePage(),
                 onProgress: recordProgress
             )
@@ -151,6 +152,77 @@ struct ReaderRootView: View {
             page: page,
             completed: completed
         )
+    }
+}
+
+/// Routes a downloaded ePub to the right reader.
+///
+/// Image-only ePubs (Calibre/manga packaging: every spine item wraps a single
+/// page image) render terribly through Readium's reflowable path — their
+/// publisher CSS pins pages to fixed pixel sizes, so pages show small and
+/// spreads never engage. Those books are detected by
+/// ``EpubImagePageSource/make(fileURL:)`` and shown through the app's own
+/// image reader (full-screen fit, landscape spreads, RTL from the spine's
+/// page-progression-direction). Text ePubs fall back to the Readium reader.
+struct EpubReaderContainer: View {
+    let book: KomgaBook
+    let fileURL: URL
+    let client: KomgaClient?
+    /// Caller-resolved 1-based resume page (local vs. server progress).
+    let initialPage: Int?
+    let onProgress: @MainActor (Int, Bool) -> Void
+
+    private enum Phase {
+        case deciding
+        case imageBook(EpubImagePageSource)
+        case reflowable
+    }
+
+    @State private var phase: Phase = .deciding
+
+    var body: some View {
+        content
+            .navigationBarBackButtonHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
+            .toolbar(.hidden, for: .tabBar)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch phase {
+        case .deciding:
+            ProgressView("ePub を確認しています…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .task {
+                    // Detection parses the spine off the main actor.
+                    let source = await Task.detached(priority: .userInitiated) {
+                        await EpubImagePageSource.make(fileURL: fileURL)
+                    }.value
+                    if let source {
+                        phase = .imageBook(source)
+                    } else {
+                        phase = .reflowable
+                    }
+                }
+        case let .imageBook(source):
+            ImageReaderScreen(
+                book: book,
+                source: source,
+                client: client,
+                initialPage: initialPage,
+                initialDirectionHint: source.prefersRightToLeft.map {
+                    $0 ? .rightToLeft : .leftToRight
+                },
+                onProgress: onProgress
+            )
+        case .reflowable:
+            EpubReaderScreen(
+                book: book,
+                fileURL: fileURL,
+                initialPage: initialPage,
+                onProgress: onProgress
+            )
+        }
     }
 }
 

@@ -33,3 +33,4 @@ Packages/*/.build/
 *.dSYM
 timeline.xctimeline
 playground.xcworkspace
+demo
