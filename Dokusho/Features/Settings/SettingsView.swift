@@ -218,6 +218,7 @@ struct SettingsView: View {
     private var appInfoSection: some View {
         Section("アプリ情報") {
             LabeledContent("バージョン", value: appVersionString)
+            LabeledContent("ビルド日時", value: buildDateString)
         }
     }
 
@@ -233,6 +234,20 @@ struct SettingsView: View {
         case let (nil, build?): return build
         case (nil, nil): return "-"
         }
+    }
+
+    /// When the running binary was built, so "which build is on this device?"
+    /// is answerable at a glance (the version string alone doesn't change
+    /// between development builds).
+    private var buildDateString: String {
+        guard
+            let url = Bundle.main.executableURL,
+            let date = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate
+        else {
+            return "-"
+        }
+        return date.formatted(date: .abbreviated, time: .shortened)
     }
 
     // MARK: - Actions
