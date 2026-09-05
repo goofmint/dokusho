@@ -5,7 +5,7 @@ import KomgaKit
 /// actions. Only ePub/PDF books can be opened; other formats show a
 /// 非対応フォーマット notice.
 ///
-/// The 読む action pushes ``ReaderDestination/book(_:)``. The download row
+/// The 読む action presents the reader full-screen. The download row
 /// reflects ``DownloadManager`` state live: idle → progress + cancel →
 /// downloaded (with delete) / failed (with retry).
 struct BookDetailView: View {
@@ -19,6 +19,7 @@ struct BookDetailView: View {
 
     @Environment(AppServices.self) private var services
     @Environment(DownloadManager.self) private var downloadManager
+    @Environment(ReaderPresentation.self) private var readerPresentation
 
     @State private var downloadActionError: String?
     /// Fresh copy fetched on appear so read progress reflects recent reading.
@@ -47,9 +48,8 @@ struct BookDetailView: View {
         .navigationTitle(displayTitle)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            // Fires on first appearance AND when the pushed reader pops back
-            // (unlike `.task(id:)`, which does not re-fire on pop), so read
-            // progress is refreshed after reading.
+            // Fires on first appearance and when the full-screen reader closes,
+            // so read progress is refreshed after reading.
             Task { await refreshBook() }
         }
     }
@@ -93,7 +93,9 @@ struct BookDetailView: View {
     private var actions: some View {
         VStack(spacing: 12) {
             if isSupported {
-                NavigationLink(value: ReaderDestination.book(book)) {
+                Button {
+                    readerPresentation.presentedBook = book
+                } label: {
                     Label(readButtonTitle, systemImage: "book")
                         .frame(maxWidth: .infinity)
                 }

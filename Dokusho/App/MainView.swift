@@ -5,12 +5,22 @@ import SwiftUI
 /// `NavigationSplitView` with a sidebar. Both drive the same ``AppSection`` set.
 struct MainView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(ReaderPresentation.self) private var readerPresentation
 
     var body: some View {
-        if horizontalSizeClass == .regular {
-            SidebarLayout()
-        } else {
-            TabLayout()
+        @Bindable var readerPresentation = readerPresentation
+
+        Group {
+            if horizontalSizeClass == .regular {
+                SidebarLayout()
+            } else {
+                TabLayout()
+            }
+        }
+        .fullScreenCover(item: $readerPresentation.presentedBook) { book in
+            NavigationStack {
+                ReaderRootView(book: book)
+            }
         }
     }
 }

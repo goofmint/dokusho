@@ -1,8 +1,7 @@
 import SwiftUI
 import KomgaKit
 
-/// Registers `navigationDestination` handlers for every ``BrowseRoute`` and
-/// ``ReaderDestination`` value.
+/// Registers `navigationDestination` handlers for every ``BrowseRoute`` value.
 ///
 /// Applied once per `NavigationStack` (library, collections, read lists, home)
 /// so any pushed route resolves consistently.
@@ -13,12 +12,6 @@ struct BrowseDestinationsModifier: ViewModifier {
         content
             .navigationDestination(for: BrowseRoute.self) { route in
                 destination(for: route)
-            }
-            .navigationDestination(for: ReaderDestination.self) { destination in
-                switch destination {
-                case let .book(book):
-                    ReaderRootView(book: book)
-                }
             }
     }
 
@@ -40,7 +33,7 @@ struct BrowseDestinationsModifier: ViewModifier {
 }
 
 extension View {
-    /// Registers all browse and reader navigation destinations on this stack.
+    /// Registers all browse navigation destinations on this stack.
     func browseDestinations() -> some View {
         modifier(BrowseDestinationsModifier())
     }

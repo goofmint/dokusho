@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import KomgaKit
 
-/// Entry point for the reader, registered for ``ReaderDestination``.
+/// Entry point for the full-screen online and offline reader presentations.
 ///
 /// Dispatches to the correct reader based on the book's `mediaProfile` and
 /// whether it is downloaded:
