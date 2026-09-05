@@ -138,6 +138,8 @@ final class PaginatedList<Element: Sendable & Codable & Identifiable & Equatable
         }
     }
 
+    /// Fetches and appends the next page, making a cancelled initial load retryable.
+    /// Later-page cancellations preserve the displayed items and pagination cursor.
     private func loadNextPage(isInitial: Bool) async {
         guard hasMore, !isLoading else { return }
         isLoading = true

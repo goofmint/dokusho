@@ -100,6 +100,7 @@ struct CollectionDetailView: View {
         .task { await buildIfNeeded() }
     }
 
+    /// Creates this collection's cached series list once, preserving it on return.
     private func buildIfNeeded() async {
         guard list == nil, let client = services.client else { return }
         let id = collection.id

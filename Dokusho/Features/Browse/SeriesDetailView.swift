@@ -31,6 +31,7 @@ struct SeriesDetailView: View {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Rebuilds only for a changed query, caching unfiltered first-page results.
     private func rebuildList() async {
         let key = searchKey
         guard list == nil || listSearchKey != key else { return }
