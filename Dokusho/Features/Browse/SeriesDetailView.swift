@@ -71,6 +71,7 @@ struct SeriesDetailView: View {
         }
     }
 
+    /// Currently selected books that can start a download.
     private var selectedBooks: [KomgaBook] {
         (list?.items ?? []).filter { selectedIDs.contains($0.id) && downloadManager.canDownload($0) }
     }
@@ -83,6 +84,7 @@ struct SeriesDetailView: View {
         isSelecting = false
     }
 
+    /// Trimmed series search query used as the list identity.
     private var searchKey: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }

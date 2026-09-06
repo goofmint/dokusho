@@ -553,11 +553,14 @@ final class DownloadManager {
         }
     }
 
+    /// Starts the next queued book after a transfer completes, ignoring
+    /// later startup failures (they are already recorded on the book state).
     private func startNextQueuedDownload() {
         var ignored: [String: Error] = [:]
         startNextQueuedDownload(failures: &ignored)
     }
 
+    /// Removes and returns the next book waiting for sequential download.
     private func dequeueNextPending() -> KomgaBook? {
         guard !pendingBooks.isEmpty else { return nil }
         let book = pendingBooks.removeFirst()

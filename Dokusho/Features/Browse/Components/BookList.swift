@@ -3,6 +3,7 @@ import KomgaKit
 
 /// The media profiles this app can open (design §0: ePub/PDF only).
 enum SupportedMediaProfile {
+    /// Whether `profile` is ePub or PDF, ignoring letter case.
     static func isSupported(_ profile: String) -> Bool {
         let normalized = profile.uppercased()
         return normalized == "EPUB" || normalized == "PDF"
