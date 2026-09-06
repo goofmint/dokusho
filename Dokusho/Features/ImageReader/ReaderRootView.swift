@@ -54,6 +54,12 @@ struct ReaderRootView: View {
             } message: {
                 Text(resumeConflictMessage)
             }
+            .onChange(of: showResumeConflictDialog) { _, isPresented in
+                // Tapping outside / Escape does not run the cancel button.
+                if !isPresented, !isResumeReady {
+                    adoptLocalPage()
+                }
+            }
     }
 
     @ViewBuilder
@@ -192,10 +198,11 @@ struct ReaderRootView: View {
         guard shouldResolveResume else { return }
 
         let localState = fetchLocalReadingState()
+        let serverPage = book.readProgress?.completed == true ? nil : book.readProgress?.page
         let result = ResumeProgressResolver.resolve(
             localPage: localState?.lastPage,
             localUpdatedAt: localState?.updatedAt,
-            serverPage: book.readProgress?.page,
+            serverPage: serverPage,
             serverReadDate: book.readProgress?.readDate
         )
         resumeResult = result
