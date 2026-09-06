@@ -31,3 +31,43 @@ public enum ThumbnailTarget: Sendable, Equatable {
         }
     }
 }
+
+// MARK: - Search requests
+
+/// Encodes Komga's equality operator with its discriminator and value.
+struct SearchEqualityDto: Encodable {
+    let value: String
+
+    private enum CodingKeys: String, CodingKey {
+        case `operator`, value
+    }
+
+    /// Encodes the operator as Komga's `is` equality condition.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode("is", forKey: .operator)
+        try container.encode(value, forKey: .value)
+    }
+}
+
+/// Restricts a series search to one library.
+struct SeriesSearchConditionDto: Encodable {
+    let libraryId: SearchEqualityDto
+}
+
+/// Restricts a book search to one series.
+struct BookSearchConditionDto: Encodable {
+    let seriesId: SearchEqualityDto
+}
+
+/// Request body for the Komga series list endpoint.
+struct SeriesSearchRequestDto: Encodable {
+    let condition: SeriesSearchConditionDto?
+    let fullTextSearch: String
+}
+
+/// Request body for the Komga books list endpoint.
+struct BookSearchRequestDto: Encodable {
+    let condition: BookSearchConditionDto
+    let fullTextSearch: String
+}

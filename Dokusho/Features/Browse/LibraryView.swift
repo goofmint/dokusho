@@ -150,13 +150,18 @@ struct LibrarySeriesView: View {
         // Debounce keystrokes: wait briefly before issuing a new query.
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled, let client = services.client else { return }
-        let search = searchQueryKey.isEmpty ? nil : searchQueryKey
+        let search = searchQueryKey
         let libraryID = libraryID
         // Cache only the unfiltered first page; search results are never cached.
-        let cache: BrowseCache? = search == nil ? .shared : nil
-        let cacheKey = search == nil ? "series-\(libraryID ?? "all")" : nil
+        let cache: BrowseCache? = search.isEmpty ? .shared : nil
+        let cacheKey = search.isEmpty ? "series-\(libraryID ?? "all")" : nil
         let newList = PaginatedList<KomgaSeries>(cache: cache, cacheKey: cacheKey) { page, size in
-            try await client.series(libraryID: libraryID, search: search, page: page, size: size)
+            if search.isEmpty {
+                return try await client.series(libraryID: libraryID, search: nil, page: page, size: size)
+            }
+            return try await client.seriesSearch(
+                libraryID: libraryID, fullTextSearch: search, page: page, size: size
+            )
         }
         list = newList
     }

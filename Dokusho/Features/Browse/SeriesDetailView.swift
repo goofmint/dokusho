@@ -3,8 +3,7 @@ import KomgaKit
 
 /// The book list for a series, with a `.searchable` filter over its books.
 ///
-/// Books are paginated via ``PaginatedList``. Search filters fetched pages
-/// client-side by title, matching the app's "search within" affordance.
+/// Books are paginated via ``PaginatedList`` and searched on the server.
 struct SeriesDetailView: View {
     let series: KomgaSeries
 
@@ -38,16 +37,14 @@ struct SeriesDetailView: View {
         }
         guard !Task.isCancelled, let client = services.client else { return }
         let seriesID = series.id
-        let query = searchKey.lowercased()
-        var filter: (@Sendable (KomgaBook) -> Bool)?
-        if !query.isEmpty {
-            filter = { book in
-                book.metadata.title.lowercased().contains(query)
-                    || book.name.lowercased().contains(query)
+        let search = searchKey
+        list = PaginatedList<KomgaBook> { page, size in
+            if search.isEmpty {
+                return try await client.books(seriesID: seriesID, page: page, size: size)
             }
-        }
-        list = PaginatedList<KomgaBook>(filter: filter) { page, size in
-            try await client.books(seriesID: seriesID, page: page, size: size)
+            return try await client.booksSearch(
+                seriesID: seriesID, fullTextSearch: search, page: page, size: size
+            )
         }
     }
 }
