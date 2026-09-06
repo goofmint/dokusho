@@ -10,6 +10,7 @@ struct SeriesDetailView: View {
     @Environment(AppServices.self) private var services
     @State private var searchText = ""
     @State private var list: PaginatedList<KomgaBook>?
+    @State private var listSearchKey: String?
 
     var body: some View {
         Group {
@@ -29,22 +30,28 @@ struct SeriesDetailView: View {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Rebuilds only for a changed query, caching unfiltered first-page results.
     private func rebuildList() async {
+        let key = searchKey
+        guard list == nil || listSearchKey != key else { return }
+
         // Debounce only real queries; an empty search key (first render, or the
         // user clearing the field) should rebuild immediately.
-        if !searchKey.isEmpty {
+        if !key.isEmpty {
             try? await Task.sleep(for: .milliseconds(300))
         }
-        guard !Task.isCancelled, let client = services.client else { return }
+        guard !Task.isCancelled, searchKey == key, let client = services.client else { return }
         let seriesID = series.id
-        let search = searchKey
-        list = PaginatedList<KomgaBook> { page, size in
-            if search.isEmpty {
+        let cache: BrowseCache? = key.isEmpty ? .shared : nil
+        let cacheKey = key.isEmpty ? "series-books-\(seriesID)" : nil
+        list = PaginatedList<KomgaBook>(cache: cache, cacheKey: cacheKey) { page, size in
+            if key.isEmpty {
                 return try await client.books(seriesID: seriesID, page: page, size: size)
             }
             return try await client.booksSearch(
-                seriesID: seriesID, fullTextSearch: search, page: page, size: size
+                seriesID: seriesID, fullTextSearch: key, page: page, size: size
             )
         }
+        listSearchKey = key
     }
 }

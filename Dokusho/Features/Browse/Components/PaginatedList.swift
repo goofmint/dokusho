@@ -138,6 +138,8 @@ final class PaginatedList<Element: Sendable & Codable & Identifiable & Equatable
         }
     }
 
+    /// Fetches and appends the next page, making a cancelled initial load retryable.
+    /// Later-page cancellations preserve the displayed items and pagination cursor.
     private func loadNextPage(isInitial: Bool) async {
         guard hasMore, !isLoading else { return }
         isLoading = true
@@ -160,7 +162,15 @@ final class PaginatedList<Element: Sendable & Codable & Identifiable & Equatable
                 await cache.save(page, key: cacheKey)
             }
         } catch is CancellationError {
-            // Screen dismissed; leave state as-is.
+            // A cancelled first load must be retryable when the view's task
+            // runs again. Later-page cancellations keep the loaded content and
+            // pagination cursor intact.
+            if isInitial, case .loadingFirst = phase {
+                items = []
+                nextPage = 0
+                hasMore = true
+                phase = .idle
+            }
         } catch {
             if isInitial {
                 phase = .failed(ErrorMessage.text(for: error))
