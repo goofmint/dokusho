@@ -14,6 +14,7 @@ enum SupportedMediaProfile {
 /// ``BrowseRoute/book(_:)``; unsupported formats are grayed out and inert.
 struct BookList: View {
     let list: PaginatedList<KomgaBook>
+    var selectedIDs: Binding<Set<String>>? = nil
 
     var body: some View {
         Group {
@@ -38,7 +39,7 @@ struct BookList: View {
     private var listView: some View {
         List {
             ForEach(list.items) { book in
-                BookRow(book: book)
+                BookRow(book: book, selectedIDs: selectedIDs)
                     .task { await list.loadMoreIfNeeded(currentItem: book) }
             }
             if list.isLoadingMore {
@@ -58,11 +59,29 @@ struct BookList: View {
 /// supported; otherwise renders grayed out with a 非対応フォーマット label.
 struct BookRow: View {
     let book: KomgaBook
+    var selectedIDs: Binding<Set<String>>? = nil
+    @Environment(DownloadManager.self) private var downloadManager
 
     private var isSupported: Bool { SupportedMediaProfile.isSupported(book.media.mediaProfile) }
 
     var body: some View {
-        if isSupported {
+        if let selectedIDs {
+            Button {
+                if selectedIDs.wrappedValue.contains(book.id) {
+                    selectedIDs.wrappedValue.remove(book.id)
+                } else {
+                    selectedIDs.wrappedValue.insert(book.id)
+                }
+            } label: {
+                HStack {
+                    Image(systemName: selectedIDs.wrappedValue.contains(book.id) ? "checkmark.circle.fill" : "circle")
+                    content
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(!downloadManager.canDownload(book))
+            .accessibilityValue(selectedIDs.wrappedValue.contains(book.id) ? "選択済み" : "未選択")
+        } else if isSupported {
             NavigationLink(value: BrowseRoute.book(book)) {
                 content
             }
@@ -92,6 +111,7 @@ struct BookRow: View {
                         .foregroundStyle(.secondary)
                 } else {
                     BookProgressLabel(book: book)
+                    downloadStatus
                 }
             }
         }
@@ -100,6 +120,25 @@ struct BookRow: View {
 
     private var displayTitle: String {
         book.metadata.title.isEmpty ? book.name : book.metadata.title
+    }
+
+    /// Shows per-book transfer state during and after a batch download.
+    @ViewBuilder
+    private var downloadStatus: some View {
+        switch downloadManager.state(for: book.id) {
+        case .notDownloaded:
+            EmptyView()
+        case let .downloading(progress):
+            ProgressView(value: progress) {
+                Text("ダウンロード中").font(.caption)
+            }
+        case .downloaded:
+            Label("ダウンロード済み", systemImage: "arrow.down.circle.fill")
+                .font(.caption).foregroundStyle(.secondary)
+        case let .failed(error):
+            Label(error.localizedDescription, systemImage: "exclamationmark.triangle")
+                .font(.caption).foregroundStyle(.red)
+        }
     }
 }
 

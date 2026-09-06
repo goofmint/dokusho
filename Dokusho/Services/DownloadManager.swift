@@ -125,6 +125,31 @@ final class DownloadManager {
 
     // MARK: - Public API
 
+    /// Starts every supported book, continuing after individual startup failures.
+    /// Already downloaded or active books are skipped by the single-book API.
+    func download(books: [KomgaBook]) -> [String: Error] {
+        var failures: [String: Error] = [:]
+        var seen: Set<String> = []
+        for book in books where seen.insert(book.id).inserted {
+            guard SupportedMediaProfile.isSupported(book.media.mediaProfile) else { continue }
+            do {
+                try download(book: book)
+            } catch {
+                failures[book.id] = error
+            }
+        }
+        return failures
+    }
+
+    /// Whether a supported book can start a new or retried download.
+    func canDownload(_ book: KomgaBook) -> Bool {
+        guard SupportedMediaProfile.isSupported(book.media.mediaProfile) else { return false }
+        switch state(for: book.id) {
+        case .notDownloaded, .failed: return true
+        case .downloading, .downloaded: return false
+        }
+    }
+
     /// Current state for a book. Unknown books are `.notDownloaded`.
     func state(for bookID: String) -> DownloadState {
         states[bookID] ?? .notDownloaded

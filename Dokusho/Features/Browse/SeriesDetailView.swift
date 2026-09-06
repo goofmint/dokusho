@@ -8,14 +8,19 @@ struct SeriesDetailView: View {
     let series: KomgaSeries
 
     @Environment(AppServices.self) private var services
+    @Environment(DownloadManager.self) private var downloadManager
     @State private var searchText = ""
     @State private var list: PaginatedList<KomgaBook>?
     @State private var listSearchKey: String?
+    @State private var isSelecting = false
+    @State private var selectedIDs: Set<String> = []
+    @State private var confirmsDownload = false
+    @State private var downloadError: String?
 
     var body: some View {
         Group {
             if let list {
-                BookList(list: list)
+                BookList(list: list, selectedIDs: isSelecting ? $selectedIDs : nil)
             } else {
                 ProgressView().controlSize(.large)
             }
@@ -24,6 +29,58 @@ struct SeriesDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "このシリーズ内を検索")
         .task(id: searchKey) { await rebuildList() }
+        .onChange(of: searchKey) { selectedIDs.removeAll() }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(isSelecting ? "完了" : "選択") {
+                    isSelecting.toggle()
+                    selectedIDs.removeAll()
+                    downloadError = nil
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if isSelecting {
+                HStack {
+                    Button("表示中を選択") {
+                        selectedIDs = Set((list?.items ?? []).filter(downloadManager.canDownload).map(\.id))
+                    }
+                    Button("選択解除") { selectedIDs.removeAll() }
+                    Spacer()
+                    Button("ダウンロード（\(selectedBooks.count)冊）") {
+                        confirmsDownload = true
+                    }
+                    .disabled(selectedBooks.isEmpty)
+                }
+                .font(.footnote)
+                .padding()
+                .background(.bar)
+            }
+        }
+        .safeAreaInset(edge: .top) {
+            if let downloadError {
+                Label(downloadError, systemImage: "exclamationmark.triangle")
+                    .font(.caption).foregroundStyle(.red).padding()
+            }
+        }
+        .confirmationDialog("\(selectedBooks.count)冊をダウンロードしますか？", isPresented: $confirmsDownload, titleVisibility: .visible) {
+            Button("ダウンロード", action: downloadSelectedBooks)
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("選択した書籍を端末に保存します。")
+        }
+    }
+
+    private var selectedBooks: [KomgaBook] {
+        (list?.items ?? []).filter { selectedIDs.contains($0.id) && downloadManager.canDownload($0) }
+    }
+
+    /// Starts eligible selections and reports startup errors without stopping the batch.
+    private func downloadSelectedBooks() {
+        let failures = downloadManager.download(books: selectedBooks)
+        downloadError = failures.isEmpty ? nil : "\(failures.count)冊のダウンロードを開始できませんでした。再度選択してお試しください。"
+        selectedIDs.removeAll()
+        isSelecting = false
     }
 
     private var searchKey: String {
