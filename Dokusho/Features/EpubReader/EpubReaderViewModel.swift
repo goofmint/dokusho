@@ -148,9 +148,11 @@ final class EpubReaderViewModel {
     /// resume 位置を決定する。resume ページを全体進捗へ近似変換し、publication の
     /// positions のうち最も近いものを初期 locator とする。
     ///
-    /// 呼び出し側から `initialPage`（ローカル/サーバー進捗を解決済み）が渡された
-    /// 場合はそれを優先する。渡されない場合は従来どおり book の `readProgress` を
-    /// 使い、完了済み・進捗なしなら先頭表示（`nil`）とする。
+    /// 呼び出し側から `initialPage`（`ReaderRootView` が確定した再開ページ）が
+    /// 渡された場合はそれを優先する。本番経路では常に渡されるため、下の
+    /// `book.readProgress` フォールバックには到達しない。渡されない場合
+    /// （デバッグハーネス）は従来どおり book の `readProgress` を使い、完了済み・
+    /// 進捗なしなら先頭表示（`nil`）とする。
     private func resolveInitialLocation() -> Locator? {
         let resumePage: Int
         if let initialPage {
