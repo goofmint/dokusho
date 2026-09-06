@@ -39,6 +39,11 @@ struct ImageReaderScreen: View {
     var initialDirectionHint: ReadingProgression? = nil
     /// (1-based page, completed) — reported on each settle for progress sync.
     let onProgress: @MainActor (Int, Bool) -> Void
+    /// Next book in the series, if one exists. The end-of-book CTA is shown
+    /// only when this is non-`nil` and the reader is on the last spread.
+    var nextVolume: KomgaBook? = nil
+    /// Opens `nextVolume` after the current reader is dismissed.
+    var onOpenNextVolume: ((KomgaBook) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -52,6 +57,10 @@ struct ImageReaderScreen: View {
     /// bottom-strip tap, and together with the header by a center tap.
     @State private var progressVisible = false
     @State private var didResolveInitialState = false
+    /// True after the pager reports the last spread. Independent of HUD state.
+    @State private var isOnLastSpread = false
+    /// End-of-book CTA visibility. Independent of `headerVisible` / `progressVisible`.
+    @State private var showNextVolumePrompt = false
     @State private var insertBlankPageAtStart = false
 
     /// Persisted background choice; shares its key with the Settings screen.
@@ -110,10 +119,17 @@ struct ImageReaderScreen: View {
                 }
 
                 hudOverlay
+
+                if showNextVolumePrompt {
+                    nextVolumeOverlay
+                }
             }
             .onAppear { isLandscape = proxy.size.width > proxy.size.height }
             .onChange(of: proxy.size) { _, newValue in
                 isLandscape = newValue.width > newValue.height
+            }
+            .onChange(of: nextVolume?.id) {
+                refreshNextVolumePrompt()
             }
         }
         .statusBarHidden(!headerVisible)
@@ -255,6 +271,25 @@ struct ImageReaderScreen: View {
 
     private func handleSettle(firstPage: Int, isLast: Bool) {
         onProgress(firstPage, isLast)
+        isOnLastSpread = isLast
+        refreshNextVolumePrompt()
+    }
+
+    private func refreshNextVolumePrompt() {
+        showNextVolumePrompt = isOnLastSpread && nextVolume != nil
+    }
+
+    private var nextVolumeOverlay: some View {
+        VStack {
+            Spacer()
+                .allowsHitTesting(false)
+            if let nextVolume {
+                NextVolumePromptButton {
+                    onOpenNextVolume?(nextVolume)
+                }
+            }
+        }
+        .padding(.bottom, 48)
     }
 
     // MARK: - Direction
