@@ -92,24 +92,22 @@ struct EpubReaderScreen: View {
     }
 
     private func readerView(navigator: EPUBNavigatorViewController) -> some View {
-        GeometryReader { proxy in
-            ZStack {
-                EpubNavigatorView(
-                    navigator: navigator,
-                    onLocationChange: { locator in
-                        viewModel.handleLocationChange(locator)
-                    },
-                    onError: { error in
-                        viewModel.handleNavigatorError(error)
-                    }
-                )
-                .ignoresSafeArea()
-                .onTapGesture(coordinateSpace: .local) { location in
-                    handleTap(at: location, containerHeight: proxy.size.height)
+        ZStack {
+            EpubNavigatorView(
+                navigator: navigator,
+                onLocationChange: { locator in
+                    viewModel.handleLocationChange(locator)
+                },
+                onError: { error in
+                    viewModel.handleNavigatorError(error)
+                },
+                onTap: { location, height in
+                    handleTap(at: location, containerHeight: height)
                 }
+            )
+            .ignoresSafeArea()
 
-                hudOverlay
-            }
+            hudOverlay
         }
     }
 
@@ -138,8 +136,9 @@ struct EpubReaderScreen: View {
     // MARK: - HUD
 
     /// Header and progress bar overlay independently. Only the bars hit-test;
-    /// the transparent gap between them passes taps through to the navigator so a
-    /// center tap always reaches ``handleTap(at:containerHeight:)``.
+    /// the transparent gap between them passes taps through to the navigator so
+    /// Readium's activate observer can deliver them to
+    /// ``handleTap(at:containerHeight:)``.
     private var hudOverlay: some View {
         VStack(spacing: 0) {
             if headerVisible {
