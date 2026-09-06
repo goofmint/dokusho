@@ -24,6 +24,7 @@ struct BookDetailView: View {
     @State private var downloadActionError: String?
     /// Fresh copy fetched on appear so read progress reflects recent reading.
     @State private var refreshedBook: KomgaBook?
+    @State private var didCompleteInitialRefresh = false
 
     private var book: KomgaBook { refreshedBook ?? initialBook }
 
@@ -47,10 +48,30 @@ struct BookDetailView: View {
         }
         .navigationTitle(displayTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            // Fires on first appearance and when the full-screen reader closes,
-            // so read progress is refreshed after reading.
-            Task { await refreshBook() }
+        .task {
+            await refreshInitiallyIfNeeded()
+        }
+        .onChange(of: readerPresentation.completedDismissalSequence) {
+            // The sequence changes only after MainView has awaited the progress
+            // flush, so this fetch cannot overtake that PATCH.
+            Task {
+                await refreshBook()
+                if !Task.isCancelled {
+                    didCompleteInitialRefresh = true
+                }
+            }
+        }
+    }
+
+    /// Performs the first fetch once. If presenting the reader cancels this
+    /// task, a same-identity task restarted behind the cover is held back until
+    /// the dismissal completion event performs the ordered refresh.
+    private func refreshInitiallyIfNeeded() async {
+        guard !didCompleteInitialRefresh,
+              !readerPresentation.isReaderTransitionActive else { return }
+        await refreshBook()
+        if !Task.isCancelled {
+            didCompleteInitialRefresh = true
         }
     }
 
@@ -94,12 +115,13 @@ struct BookDetailView: View {
         VStack(spacing: 12) {
             if isSupported {
                 Button {
-                    readerPresentation.presentedBook = book
+                    readerPresentation.present(book)
                 } label: {
                     Label(readButtonTitle, systemImage: "book")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(readerPresentation.isReaderTransitionActive)
 
                 downloadRow
             }

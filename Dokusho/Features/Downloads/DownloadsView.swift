@@ -25,6 +25,7 @@ struct DownloadsView: View {
 /// Reads ``DownloadManager`` from the environment. The manager is the source of
 /// truth for live state; the `DownloadedBook` records drive the list contents.
 struct DownloadsList: View {
+    @Environment(AppServices.self) private var services
     @Environment(DownloadManager.self) private var downloadManager
     /// All persisted download records, kept live by SwiftData.
     @Query(sort: \DownloadedBook.title) private var records: [DownloadedBook]
@@ -36,7 +37,10 @@ struct DownloadsList: View {
 
     var body: some View {
         content
-            .fullScreenCover(item: $readingBook) { book in
+            .fullScreenCover(
+                item: $readingBook,
+                onDismiss: flushReaderProgress
+            ) { book in
                 NavigationStack {
                     ReaderRootView(book: book)
                 }
@@ -52,6 +56,11 @@ struct DownloadsList: View {
             } message: {
                 Text(metadataError ?? "")
             }
+    }
+
+    /// Flushes progress recorded by the dismissed offline reader.
+    private func flushReaderProgress() {
+        Task { await services.progressSyncer?.flushOutstanding() }
     }
 
     @ViewBuilder

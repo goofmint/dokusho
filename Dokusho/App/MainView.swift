@@ -5,6 +5,7 @@ import SwiftUI
 /// `NavigationSplitView` with a sidebar. Both drive the same ``AppSection`` set.
 struct MainView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(AppServices.self) private var services
     @Environment(ReaderPresentation.self) private var readerPresentation
 
     var body: some View {
@@ -17,10 +18,22 @@ struct MainView: View {
                 TabLayout()
             }
         }
-        .fullScreenCover(item: $readerPresentation.presentedBook) { book in
+        .fullScreenCover(
+            item: $readerPresentation.presentedBook,
+            onDismiss: finishReaderDismissal
+        ) { book in
             NavigationStack {
                 ReaderRootView(book: book)
             }
+        }
+    }
+
+    /// Flushes reader progress before allowing book details to refresh or
+    /// another online reader to be presented.
+    private func finishReaderDismissal() {
+        Task {
+            await services.progressSyncer?.flushOutstanding()
+            readerPresentation.didCompleteDismissal()
         }
     }
 }
