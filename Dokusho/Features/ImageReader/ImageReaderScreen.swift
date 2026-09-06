@@ -19,8 +19,9 @@ import KomgaKit
 ///
 /// Reading direction is resolved once on appear: a per-book override in
 /// ``LocalReadingState`` wins; otherwise the series metadata's direction; else
-/// LTR. Resume position is the newer of the server `readProgress.page` and the
-/// local state.
+/// LTR. Resume position prefers a caller-supplied ``initialPage`` (resolved by
+/// ``ReaderRootView``); otherwise ``ResumeProgressResolver`` compares local
+/// state with `book.readProgress`.
 struct ImageReaderScreen: View {
     let book: KomgaBook
     /// Where page bitmaps come from (streaming API or local PDF rasterizer).
@@ -29,8 +30,8 @@ struct ImageReaderScreen: View {
     /// downloaded book) falls back to the user's default direction.
     let client: KomgaClient?
     /// Caller-resolved 1-based resume page (local vs. server progress). When
-    /// `nil` the screen resolves the resume position itself from
-    /// ``LocalReadingState`` and `book.readProgress` (the streaming behavior).
+    /// `nil` the screen falls back to ``ResumeProgressResolver`` (debug harness
+    /// and any caller that has not already resolved).
     var initialPage: Int? = nil
     /// Reading direction declared by the content itself (e.g. an ePub spine's
     /// page-progression-direction). Beats the series lookup / default setting;
@@ -286,7 +287,7 @@ struct ImageReaderScreen: View {
             progression = ReadingProgression(rawValue: ReadingDirectionDefault.current().rawValue) ?? .leftToRight
         }
 
-        // Resume position: newer of server progress vs local state.
+        // Resume position: caller-resolved page, else the shared local-first rules.
         let resumePage = resolveResumePage(localState: localState)
         currentSpreadIndex = layout.spreadIndex(containing: resumePage)
 
@@ -294,27 +295,20 @@ struct ImageReaderScreen: View {
     }
 
     private func resolveResumePage(localState: LocalReadingState?) -> Int {
-        // A caller-resolved page (downloaded books, where `book.readProgress`
-        // is a stale snapshot) wins outright.
+        // A caller-resolved page (ReaderRootView, where local vs. cloud has
+        // already been confirmed) wins outright.
         if let initialPage {
             return min(max(initialPage, 1), pageCount)
         }
-        let serverPage = book.readProgress?.page
-        let localPage = localState?.lastPage
-        let localNewer: Bool
-        if let localUpdated = localState?.updatedAt, let serverDate = book.readProgress?.readDate {
-            localNewer = localUpdated > serverDate
-        } else {
-            localNewer = localState != nil && book.readProgress == nil
-        }
-        let page: Int
-        if localNewer, let localPage {
-            page = localPage
-        } else if let serverPage {
-            page = serverPage
-        } else {
-            page = localPage ?? 1
-        }
+        let result = ResumeProgressResolver.resolve(
+            localPage: localState?.lastPage,
+            localUpdatedAt: localState?.updatedAt,
+            serverPage: book.readProgress?.page,
+            serverReadDate: book.readProgress?.readDate
+        )
+        // Debug harness / callers that omit `initialPage`: adopt local without
+        // prompting. There is no confirmation UI on this screen.
+        let page = result.adoptedPage ?? 1
         return min(max(page, 1), pageCount)
     }
 

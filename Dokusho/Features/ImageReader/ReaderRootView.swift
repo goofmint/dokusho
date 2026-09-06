@@ -18,11 +18,23 @@ import KomgaKit
 /// Progress from every reader flows through ``AppServices/progressSyncer`` via a
 /// single `onProgress` closure whose shape is `(Int, Bool)` = (1-based page,
 /// completed).
+///
+/// Resume position is resolved once via ``ResumeProgressResolver`` before any
+/// reader is built. Local progress wins by default. When the cloud page is
+/// newer and differs, a confirmation dialog asks whether to move.
 struct ReaderRootView: View {
     let book: KomgaBook
 
     @Environment(AppServices.self) private var services
     @Environment(\.modelContext) private var modelContext
+
+    /// Full Phase-1 resolution (adopted page + conflict info) for the confirm UI.
+    @State private var resumeResult: ResumeProgressResult?
+    /// 1-based page passed as `initialPage` once resolution (and any confirm) finishes.
+    @State private var confirmedPage: Int?
+    /// True once a reader may be constructed (aligned immediately, or after the dialog).
+    @State private var isResumeReady = false
+    @State private var showResumeConflictDialog = false
 
     private var profile: String {
         book.media.mediaProfile.uppercased()
@@ -31,21 +43,44 @@ struct ReaderRootView: View {
     var body: some View {
         content
             .navigationBarTitleDisplayMode(.inline)
+            .task { resolveResumeIfNeeded() }
+            .confirmationDialog(
+                "続きの位置が異なります",
+                isPresented: $showResumeConflictDialog,
+                titleVisibility: .visible
+            ) {
+                Button("クラウドの位置で開く") { adoptCloudPage() }
+                Button("この端末の位置で開く", role: .cancel) { adoptLocalPage() }
+            } message: {
+                Text(resumeConflictMessage)
+            }
     }
 
     @ViewBuilder
     private var content: some View {
         switch profile {
         case "PDF":
-            pdfReader
+            pdfContent
         case "EPUB":
-            epubReader
+            epubContent
         default:
             unsupported
         }
     }
 
     // MARK: - PDF
+
+    @ViewBuilder
+    private var pdfContent: some View {
+        if !canPresentPDFReader {
+            disconnected
+        } else if isResumeReady {
+            pdfReader
+        } else {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
 
     @ViewBuilder
     private var pdfReader: some View {
@@ -56,7 +91,7 @@ struct ReaderRootView: View {
                 book: book,
                 fileURL: fileURL,
                 client: services.client,
-                initialPage: effectiveResumePage(),
+                initialPage: confirmedPage,
                 onProgress: recordProgress
             )
         } else if let imageLoader = services.imageLoader, let client = services.client {
@@ -64,6 +99,7 @@ struct ReaderRootView: View {
                 book: book,
                 source: StreamingPageSource(loader: imageLoader, bookID: book.id),
                 client: client,
+                initialPage: confirmedPage,
                 onProgress: recordProgress
             )
         } else {
@@ -74,13 +110,25 @@ struct ReaderRootView: View {
     // MARK: - EPUB
 
     @ViewBuilder
+    private var epubContent: some View {
+        if services.downloadManager?.localURL(for: book.id) == nil {
+            downloadPrompt
+        } else if isResumeReady {
+            epubReader
+        } else {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
     private var epubReader: some View {
         if let fileURL = services.downloadManager?.localURL(for: book.id) {
             EpubReaderContainer(
                 book: book,
                 fileURL: fileURL,
                 client: services.client,
-                initialPage: effectiveResumePage(),
+                initialPage: confirmedPage,
                 onProgress: recordProgress
             )
         } else {
@@ -114,27 +162,73 @@ struct ReaderRootView: View {
 
     // MARK: - Resume position
 
-    /// Computes the 1-based page a downloaded PDF/ePub reader should resume at.
+    private var canPresentPDFReader: Bool {
+        services.downloadManager?.localURL(for: book.id) != nil
+            || (services.imageLoader != nil && services.client != nil)
+    }
+
+    /// True when a reader will actually be built and therefore needs a resume page.
+    private var shouldResolveResume: Bool {
+        switch profile {
+        case "PDF": return canPresentPDFReader
+        case "EPUB": return services.downloadManager?.localURL(for: book.id) != nil
+        default: return false
+        }
+    }
+
+    private var resumeConflictMessage: String {
+        guard case let .conflict(localPage, cloudPage) = resumeResult else {
+            return "この端末とクラウドで続きの位置が異なります。"
+        }
+        return "この端末では \(localPage) ページ、クラウドでは \(cloudPage) ページです。クラウドの位置へ移動しますか？"
+    }
+
+    /// Fetches local + server progress and applies ``ResumeProgressResolver``.
     ///
-    /// The `book.readProgress` snapshot is stale (captured at list-fetch time, or
-    /// frozen at download time for books opened from the persisted sidecar), so it
-    /// alone would resume at an old page. ``LocalReadingState`` is written on every
-    /// page turn and is the local source of truth. Prefer it when it is newer than
-    /// the server snapshot (or when there is no server snapshot); otherwise fall
-    /// back to the server page. Returns `nil` when neither source is available, so
-    /// the reader keeps its current book-derived behavior.
-    private func effectiveResumePage() -> Int? {
+    /// Aligned results build the reader immediately. A conflict holds construction
+    /// and presents the confirmation dialog; the default (cancel) keeps local.
+    private func resolveResumeIfNeeded() {
+        guard !isResumeReady, !showResumeConflictDialog else { return }
+        guard shouldResolveResume else { return }
+
+        let localState = fetchLocalReadingState()
+        let result = ResumeProgressResolver.resolve(
+            localPage: localState?.lastPage,
+            localUpdatedAt: localState?.updatedAt,
+            serverPage: book.readProgress?.page,
+            serverReadDate: book.readProgress?.readDate
+        )
+        resumeResult = result
+
+        switch result {
+        case .aligned(let page):
+            confirmedPage = page
+            isResumeReady = true
+        case .conflict:
+            showResumeConflictDialog = true
+        }
+    }
+
+    private func adoptLocalPage() {
+        confirmedPage = resumeResult?.adoptedPage
+        isResumeReady = true
+    }
+
+    private func adoptCloudPage() {
+        if case let .conflict(_, cloudPage) = resumeResult {
+            confirmedPage = cloudPage
+        } else {
+            confirmedPage = resumeResult?.adoptedPage
+        }
+        isResumeReady = true
+    }
+
+    private func fetchLocalReadingState() -> LocalReadingState? {
         let bookID = book.id
         let descriptor = FetchDescriptor<LocalReadingState>(
             predicate: #Predicate { $0.bookID == bookID }
         )
-        let localState = (try? modelContext.fetch(descriptor))?.first
-
-        if let localState,
-           book.readProgress == nil || localState.updatedAt > (book.readProgress?.readDate ?? .distantPast) {
-            return localState.lastPage
-        }
-        return book.readProgress?.page
+        return (try? modelContext.fetch(descriptor))?.first
     }
 
     // MARK: - Progress
