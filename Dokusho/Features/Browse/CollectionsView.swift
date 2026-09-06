@@ -5,6 +5,7 @@ import KomgaKit
 /// which shows the collection's series grid.
 struct CollectionsView: View {
     @Environment(AppServices.self) private var services
+    @State private var searchText = ""
     @State private var list: PaginatedList<KomgaCollection>?
 
     var body: some View {
@@ -17,15 +18,30 @@ struct CollectionsView: View {
                 }
             }
             .navigationTitle("コレクション")
+            .searchable(text: $searchText, prompt: "コレクションを検索")
             .browseDestinations()
-            .task { await buildIfNeeded() }
+            .task(id: searchQueryKey) { await rebuildList() }
         }
     }
 
-    private func buildIfNeeded() async {
-        guard list == nil, let client = services.client else { return }
-        list = PaginatedList<KomgaCollection>(cache: .shared, cacheKey: "collections") { page, size in
-            try await client.collections(page: page, size: size)
+    /// Debounce key: changes when the trimmed search text changes.
+    private var searchQueryKey: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func rebuildList() async {
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled, let client = services.client else { return }
+        let search = searchQueryKey
+        // Cache only the unfiltered first page; search results are never cached.
+        let cache: BrowseCache? = search.isEmpty ? .shared : nil
+        let cacheKey = search.isEmpty ? "collections" : nil
+        list = PaginatedList<KomgaCollection>(cache: cache, cacheKey: cacheKey) { page, size in
+            try await client.collections(
+                search: search.isEmpty ? nil : search,
+                page: page,
+                size: size
+            )
         }
     }
 }

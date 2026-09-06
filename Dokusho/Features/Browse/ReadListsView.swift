@@ -5,6 +5,7 @@ import KomgaKit
 /// which shows the read list's book list.
 struct ReadListsView: View {
     @Environment(AppServices.self) private var services
+    @State private var searchText = ""
     @State private var list: PaginatedList<KomgaReadList>?
 
     var body: some View {
@@ -17,15 +18,30 @@ struct ReadListsView: View {
                 }
             }
             .navigationTitle("リードリスト")
+            .searchable(text: $searchText, prompt: "リードリストを検索")
             .browseDestinations()
-            .task { await buildIfNeeded() }
+            .task(id: searchQueryKey) { await rebuildList() }
         }
     }
 
-    private func buildIfNeeded() async {
-        guard list == nil, let client = services.client else { return }
-        list = PaginatedList<KomgaReadList>(cache: .shared, cacheKey: "readlists") { page, size in
-            try await client.readLists(page: page, size: size)
+    /// Debounce key: changes when the trimmed search text changes.
+    private var searchQueryKey: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func rebuildList() async {
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled, let client = services.client else { return }
+        let search = searchQueryKey
+        // Cache only the unfiltered first page; search results are never cached.
+        let cache: BrowseCache? = search.isEmpty ? .shared : nil
+        let cacheKey = search.isEmpty ? "readlists" : nil
+        list = PaginatedList<KomgaReadList>(cache: cache, cacheKey: cacheKey) { page, size in
+            try await client.readLists(
+                search: search.isEmpty ? nil : search,
+                page: page,
+                size: size
+            )
         }
     }
 }

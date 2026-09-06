@@ -144,11 +144,19 @@ public struct KomgaClient: Sendable {
 
     // MARK: - Collections / read lists
 
-    /// Fetches a page of collections.
-    public func collections(page: Int, size: Int) async throws -> Page<KomgaCollection> {
-        try await get(
+    /// Fetches a page of collections, optionally filtered by search text.
+    public func collections(
+        search: String?,
+        page: Int,
+        size: Int
+    ) async throws -> Page<KomgaCollection> {
+        var query = paginationQuery(page: page, size: size)
+        if let search, !search.isEmpty {
+            query.append(URLQueryItem(name: "search", value: search))
+        }
+        return try await get(
             path: "/api/v1/collections",
-            queryItems: paginationQuery(page: page, size: size)
+            queryItems: query
         )
     }
 
@@ -164,11 +172,19 @@ public struct KomgaClient: Sendable {
         )
     }
 
-    /// Fetches a page of read lists.
-    public func readLists(page: Int, size: Int) async throws -> Page<KomgaReadList> {
-        try await get(
+    /// Fetches a page of read lists, optionally filtered by search text.
+    public func readLists(
+        search: String?,
+        page: Int,
+        size: Int
+    ) async throws -> Page<KomgaReadList> {
+        var query = paginationQuery(page: page, size: size)
+        if let search, !search.isEmpty {
+            query.append(URLQueryItem(name: "search", value: search))
+        }
+        return try await get(
             path: "/api/v1/readlists",
-            queryItems: paginationQuery(page: page, size: size)
+            queryItems: query
         )
     }
 

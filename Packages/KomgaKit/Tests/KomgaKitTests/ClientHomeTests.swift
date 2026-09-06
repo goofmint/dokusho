@@ -30,9 +30,28 @@ struct ClientHomeTests {
     func collections() async throws {
         let harness = try MockHarness()
         harness.stub { _ in .init(data: try Fixture.data("collections_page")) }
-        let page = try await harness.client.collections(page: 0, size: 20)
+        let page = try await harness.client.collections(search: nil, page: 0, size: 20)
         #expect(page.content.first?.name == "Best of 2024")
         #expect(harness.lastRequest?.url?.path == "/api/v1/collections")
+        #expect(queryDictionary(try #require(harness.lastRequest))["search"] == nil)
+    }
+
+    @Test("collections sends search query")
+    func collectionsSearch() async throws {
+        let harness = try MockHarness()
+        harness.stub { _ in .init(data: try Fixture.data("collections_page")) }
+        _ = try await harness.client.collections(search: "エンジェル・ハート", page: 0, size: 20)
+        let request = try #require(harness.lastRequest)
+        #expect(request.url?.path == "/api/v1/collections")
+        #expect(queryDictionary(request)["search"] == "エンジェル・ハート")
+    }
+
+    @Test("collections omits empty search")
+    func collectionsEmptySearch() async throws {
+        let harness = try MockHarness()
+        harness.stub { _ in .init(data: try Fixture.data("collections_page")) }
+        _ = try await harness.client.collections(search: "", page: 0, size: 20)
+        #expect(queryDictionary(try #require(harness.lastRequest))["search"] == nil)
     }
 
     @Test("collectionSeries hits collections/{id}/series")
@@ -48,9 +67,28 @@ struct ClientHomeTests {
     func readLists() async throws {
         let harness = try MockHarness()
         harness.stub { _ in .init(data: try Fixture.data("readlists_page")) }
-        let page = try await harness.client.readLists(page: 0, size: 20)
+        let page = try await harness.client.readLists(search: nil, page: 0, size: 20)
         #expect(page.content.first?.name == "Crossover Event")
         #expect(harness.lastRequest?.url?.path == "/api/v1/readlists")
+        #expect(queryDictionary(try #require(harness.lastRequest))["search"] == nil)
+    }
+
+    @Test("readLists sends search query")
+    func readListsSearch() async throws {
+        let harness = try MockHarness()
+        harness.stub { _ in .init(data: try Fixture.data("readlists_page")) }
+        _ = try await harness.client.readLists(search: "エンジェル・ハート", page: 0, size: 20)
+        let request = try #require(harness.lastRequest)
+        #expect(request.url?.path == "/api/v1/readlists")
+        #expect(queryDictionary(request)["search"] == "エンジェル・ハート")
+    }
+
+    @Test("readLists omits empty search")
+    func readListsEmptySearch() async throws {
+        let harness = try MockHarness()
+        harness.stub { _ in .init(data: try Fixture.data("readlists_page")) }
+        _ = try await harness.client.readLists(search: "", page: 0, size: 20)
+        #expect(queryDictionary(try #require(harness.lastRequest))["search"] == nil)
     }
 
     @Test("readListBooks hits readlists/{id}/books")
