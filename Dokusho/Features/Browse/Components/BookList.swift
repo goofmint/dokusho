@@ -4,7 +4,8 @@ import KomgaKit
 /// The media profiles this app can open (design §0: ePub/PDF only).
 enum SupportedMediaProfile {
     static func isSupported(_ profile: String) -> Bool {
-        profile == "EPUB" || profile == "PDF"
+        let normalized = profile.uppercased()
+        return normalized == "EPUB" || normalized == "PDF"
     }
 }
 
