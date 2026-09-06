@@ -71,3 +71,17 @@ struct BookSearchRequestDto: Encodable {
     let condition: BookSearchConditionDto
     let fullTextSearch: String
 }
+
+/// Stable `sort` query tokens sent to Komga list endpoints.
+///
+/// Values are `field,direction` strings accepted by Komga's `sort` parameter.
+enum KomgaSort {
+    /// Series list default, matching Komga Web UI title order.
+    static let seriesTitleAsc = "metadata.titleSort,asc"
+    /// Books in a series, matching Komga Web UI number order.
+    static let bookNumberAsc = "metadata.numberSort,asc"
+    /// Keep Reading: most recently read first.
+    static let readProgressDateDesc = "readProgress.readDate,desc"
+    /// Unique tie-breaker so offset pages stay stable when the primary key ties.
+    static let idAsc = "id,asc"
+}

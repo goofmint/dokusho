@@ -81,7 +81,9 @@ final class PaginatedList<Element: Sendable & Codable & Identifiable & Equatable
            let cached = await cache.load(Page<Element>.self, key: cacheKey) {
             // Show cached results immediately, then revalidate in the background.
             applyFirstPage(cached)
+            await prefetchWhileSparse()
             await revalidateFirstPage()
+            await prefetchWhileSparse()
         } else {
             await reload()
         }
@@ -95,6 +97,7 @@ final class PaginatedList<Element: Sendable & Codable & Identifiable & Equatable
         hasMore = true
         phase = .loadingFirst
         await loadNextPage(isInitial: true)
+        await prefetchWhileSparse()
     }
 
     /// Fetches page 0 without showing a spinner, keeping the already-displayed
@@ -122,19 +125,28 @@ final class PaginatedList<Element: Sendable & Codable & Identifiable & Equatable
     /// pagination cursors so subsequent scrolls continue from page 1.
     private func applyFirstPage(_ page: Page<Element>) {
         let newItems = filter.map { page.content.filter($0) } ?? page.content
-        items = newItems
+        items = uniquedPreservingOrder(newItems)
         hasMore = !page.last
         nextPage = 1
         phase = .loaded
     }
 
     /// Loads the next page when the user scrolls near the given item.
+    ///
+    /// `hasMore` follows the unfiltered server `page.last`. When a client
+    /// filter leaves fewer visible rows than the scroll threshold, keep
+    /// fetching while more server pages remain.
     func loadMoreIfNeeded(currentItem: Element) async {
         guard hasMore, !isLoading else { return }
+        if shouldPrefetchForSparseFilter() {
+            await prefetchWhileSparse()
+            return
+        }
         // Trigger when the last few items become visible.
         let thresholdIndex = items.index(items.endIndex, offsetBy: -5, limitedBy: items.startIndex) ?? items.startIndex
         if let currentIndex = items.firstIndex(of: currentItem), currentIndex >= thresholdIndex {
             await loadNextPage(isInitial: false)
+            await prefetchWhileSparse()
         }
     }
 
@@ -153,7 +165,7 @@ final class PaginatedList<Element: Sendable & Codable & Identifiable & Equatable
             let requestedPage = nextPage
             let page = try await fetch(requestedPage, browsePageSize)
             let newItems = filter.map { page.content.filter($0) } ?? page.content
-            items.append(contentsOf: newItems)
+            items.append(contentsOf: excludingExistingIDs(newItems))
             hasMore = !page.last
             nextPage += 1
             phase = .loaded
@@ -177,6 +189,33 @@ final class PaginatedList<Element: Sendable & Codable & Identifiable & Equatable
             }
             // For subsequent pages, keep showing what we have; the row spinner
             // simply stops. A later scroll retries.
+        }
+    }
+
+    /// Drops later occurrences of an `id`, keeping the first (server) order.
+    private func uniquedPreservingOrder(_ elements: [Element]) -> [Element] {
+        var seen: Set<Element.ID> = []
+        return elements.filter { seen.insert($0.id).inserted }
+    }
+
+    private func excludingExistingIDs(_ elements: [Element]) -> [Element] {
+        var seen = Set(items.map(\.id))
+        return elements.filter { seen.insert($0.id).inserted }
+    }
+
+    /// Filtered lists can shrink below the scroll threshold while the server
+    /// still has pages. Keep fetching in that case so titles are not dropped.
+    private func shouldPrefetchForSparseFilter() -> Bool {
+        filter != nil && hasMore && items.count < 5
+    }
+
+    private func prefetchWhileSparse() async {
+        while !Task.isCancelled, shouldPrefetchForSparseFilter(), !isLoading {
+            let pageBefore = nextPage
+            await loadNextPage(isInitial: false)
+            if Task.isCancelled || nextPage == pageBefore {
+                break
+            }
         }
     }
 }
