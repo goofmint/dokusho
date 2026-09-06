@@ -100,10 +100,14 @@ struct CollectionDetailView: View {
         .task { await buildIfNeeded() }
     }
 
+    /// Creates this collection's cached series list once, preserving it on return.
     private func buildIfNeeded() async {
         guard list == nil, let client = services.client else { return }
         let id = collection.id
-        list = PaginatedList<KomgaSeries> { page, size in
+        list = PaginatedList<KomgaSeries>(
+            cache: .shared,
+            cacheKey: "collection-series-\(id)"
+        ) { page, size in
             try await client.collectionSeries(id: id, page: page, size: size)
         }
     }
