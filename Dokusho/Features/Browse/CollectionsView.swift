@@ -36,13 +36,16 @@ struct CollectionsView: View {
         // Cache only the unfiltered first page; search results are never cached.
         let cache: BrowseCache? = search.isEmpty ? .shared : nil
         let cacheKey = search.isEmpty ? "collections" : nil
-        list = PaginatedList<KomgaCollection>(cache: cache, cacheKey: cacheKey) { page, size in
+        let newList = PaginatedList<KomgaCollection>(cache: cache, cacheKey: cacheKey) { page, size in
             try await client.collections(
                 search: search.isEmpty ? nil : search,
                 page: page,
                 size: size
             )
         }
+        list = newList
+        // Child `.task` may not restart when only the list instance changes.
+        await newList.loadInitialIfNeeded()
     }
 }
 
@@ -65,7 +68,7 @@ private struct CollectionListContent: View {
                 }
             }
         }
-        .task { await list.loadInitialIfNeeded() }
+        .task(id: ObjectIdentifier(list)) { await list.loadInitialIfNeeded() }
     }
 
     private var rows: some View {
