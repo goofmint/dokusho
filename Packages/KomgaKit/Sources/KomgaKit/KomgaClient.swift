@@ -52,7 +52,9 @@ public struct KomgaClient: Sendable {
             query.append(URLQueryItem(name: "search", value: search))
         } else {
             // Unspecified sort makes offset pagination nondeterministic.
+            // Search keeps server relevance and therefore omits `sort`.
             query.append(URLQueryItem(name: "sort", value: KomgaSort.seriesTitleAsc))
+            query.append(URLQueryItem(name: "sort", value: KomgaSort.idAsc))
         }
         return try await get(path: "/api/v1/series", queryItems: query)
     }
@@ -65,6 +67,7 @@ public struct KomgaClient: Sendable {
     ) async throws -> Page<KomgaBook> {
         var query = paginationQuery(page: page, size: size)
         query.append(URLQueryItem(name: "sort", value: KomgaSort.bookNumberAsc))
+        query.append(URLQueryItem(name: "sort", value: KomgaSort.idAsc))
         return try await get(
             path: "/api/v1/series/\(seriesID)/books",
             queryItems: query

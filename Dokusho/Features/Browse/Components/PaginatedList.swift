@@ -199,8 +199,8 @@ final class PaginatedList<Element: Sendable & Codable & Identifiable & Equatable
     }
 
     private func excludingExistingIDs(_ elements: [Element]) -> [Element] {
-        let existing = Set(items.map(\.id))
-        return elements.filter { !existing.contains($0.id) }
+        var seen = Set(items.map(\.id))
+        return elements.filter { seen.insert($0.id).inserted }
     }
 
     /// Filtered lists can shrink below the scroll threshold while the server
@@ -210,8 +210,12 @@ final class PaginatedList<Element: Sendable & Codable & Identifiable & Equatable
     }
 
     private func prefetchWhileSparse() async {
-        while shouldPrefetchForSparseFilter(), !isLoading {
+        while !Task.isCancelled, shouldPrefetchForSparseFilter(), !isLoading {
+            let pageBefore = nextPage
             await loadNextPage(isInitial: false)
+            if Task.isCancelled || nextPage == pageBefore {
+                break
+            }
         }
     }
 }

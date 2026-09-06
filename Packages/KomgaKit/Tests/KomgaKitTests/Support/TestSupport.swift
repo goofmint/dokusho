@@ -84,6 +84,16 @@ func queryDictionary(_ request: URLRequest) -> [String: String] {
     return result
 }
 
+/// All values for a repeated query name, in request order.
+func queryValues(_ request: URLRequest, name: String) -> [String] {
+    guard
+        let url = request.url,
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+        let items = components.queryItems
+    else { return [] }
+    return items.compactMap { $0.name == name ? $0.value : nil }
+}
+
 /// A thread-safe call counter for stateful stubs (e.g. fail-then-succeed).
 final class Counter: @unchecked Sendable {
     private let lock = NSLock()

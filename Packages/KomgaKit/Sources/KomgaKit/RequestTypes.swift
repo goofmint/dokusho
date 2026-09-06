@@ -82,4 +82,6 @@ enum KomgaSort {
     static let bookNumberAsc = "metadata.numberSort,asc"
     /// Keep Reading: most recently read first.
     static let readProgressDateDesc = "readProgress.readDate,desc"
+    /// Unique tie-breaker so offset pages stay stable when the primary key ties.
+    static let idAsc = "id,asc"
 }
