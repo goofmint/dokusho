@@ -3,8 +3,7 @@ import KomgaKit
 
 /// The book list for a series, with a `.searchable` filter over its books.
 ///
-/// Books are paginated via ``PaginatedList``. Search filters fetched pages
-/// client-side by title, matching the app's "search within" affordance.
+/// Books are paginated via ``PaginatedList`` and searched on the server.
 struct SeriesDetailView: View {
     let series: KomgaSeries
 
@@ -43,18 +42,15 @@ struct SeriesDetailView: View {
         }
         guard !Task.isCancelled, searchKey == key, let client = services.client else { return }
         let seriesID = series.id
-        let query = key.lowercased()
-        var filter: (@Sendable (KomgaBook) -> Bool)?
-        if !query.isEmpty {
-            filter = { book in
-                book.metadata.title.lowercased().contains(query)
-                    || book.name.lowercased().contains(query)
+        let cache: BrowseCache? = key.isEmpty ? .shared : nil
+        let cacheKey = key.isEmpty ? "series-books-\(seriesID)" : nil
+        list = PaginatedList<KomgaBook>(cache: cache, cacheKey: cacheKey) { page, size in
+            if key.isEmpty {
+                return try await client.books(seriesID: seriesID, page: page, size: size)
             }
-        }
-        let cache: BrowseCache? = query.isEmpty ? .shared : nil
-        let cacheKey = query.isEmpty ? "series-books-\(seriesID)" : nil
-        list = PaginatedList<KomgaBook>(filter: filter, cache: cache, cacheKey: cacheKey) { page, size in
-            try await client.books(seriesID: seriesID, page: page, size: size)
+            return try await client.booksSearch(
+                seriesID: seriesID, fullTextSearch: key, page: page, size: size
+            )
         }
         listSearchKey = key
     }

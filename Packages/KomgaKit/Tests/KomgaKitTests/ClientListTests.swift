@@ -53,6 +53,58 @@ struct ClientListTests {
         #expect(query["page"] == "0")
     }
 
+    @Test("series full-text search posts Japanese query and library condition")
+    func seriesFullTextSearch() async throws {
+        let harness = try MockHarness()
+        harness.stub { _ in .init(data: try Fixture.data("series_page")) }
+        _ = try await harness.client.seriesSearch(
+            libraryID: "0LIB0001", fullTextSearch: "ワンパン", page: 1, size: 30
+        )
+        let request = try #require(harness.lastRequest)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/api/v1/series/list")
+        #expect(queryDictionary(request)["page"] == "1")
+        #expect(queryDictionary(request)["size"] == "30")
+        let body = try #require(listBodyData(request))
+        let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        #expect(json["fullTextSearch"] as? String == "ワンパン")
+        let condition = try #require(json["condition"] as? [String: Any])
+        let library = try #require(condition["libraryId"] as? [String: Any])
+        #expect(library["operator"] as? String == "is")
+        #expect(library["value"] as? String == "0LIB0001")
+    }
+
+    @Test("series full-text search omits nil library condition")
+    func seriesFullTextSearchWithoutLibrary() async throws {
+        let harness = try MockHarness()
+        harness.stub { _ in .init(data: try Fixture.data("series_page")) }
+        _ = try await harness.client.seriesSearch(
+            libraryID: nil, fullTextSearch: "ワンパン", page: 0, size: 20
+        )
+        let body = try #require(harness.lastRequest.flatMap(listBodyData))
+        let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        #expect(json["condition"] == nil)
+    }
+
+    @Test("book full-text search posts Japanese query and series condition")
+    func booksFullTextSearch() async throws {
+        let harness = try MockHarness()
+        harness.stub { _ in .init(data: try Fixture.data("books_page")) }
+        _ = try await harness.client.booksSearch(
+            seriesID: "0SERIES01", fullTextSearch: "ワンパン", page: 2, size: 10
+        )
+        let request = try #require(harness.lastRequest)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/api/v1/books/list")
+        let body = try #require(listBodyData(request))
+        let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        #expect(json["fullTextSearch"] as? String == "ワンパン")
+        let condition = try #require(json["condition"] as? [String: Any])
+        let series = try #require(condition["seriesId"] as? [String: Any])
+        #expect(series["operator"] as? String == "is")
+        #expect(series["value"] as? String == "0SERIES01")
+    }
+
     @Test("books hits series/{id}/books")
     func books() async throws {
         let harness = try MockHarness()
@@ -79,6 +131,24 @@ struct ClientListTests {
         #expect(series.id == "0SERIES01")
         #expect(harness.lastRequest?.url?.path == "/api/v1/series/0SERIES01")
     }
+}
+
+/// Reads a captured request body from either its data or stream representation.
+private func listBodyData(_ request: URLRequest) -> Data? {
+    if let body = request.httpBody { return body }
+    guard let stream = request.httpBodyStream else { return nil }
+    stream.open()
+    defer { stream.close() }
+    var data = Data()
+    let bufferSize = 1024
+    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+    defer { buffer.deallocate() }
+    while stream.hasBytesAvailable {
+        let read = stream.read(buffer, maxLength: bufferSize)
+        if read <= 0 { break }
+        data.append(buffer, count: read)
+    }
+    return data
 }
 
 @Suite("Error mapping via client")

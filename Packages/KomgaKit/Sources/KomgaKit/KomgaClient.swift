@@ -66,6 +66,46 @@ public struct KomgaClient: Sendable {
         )
     }
 
+    /// Searches series using Komga's server-side full-text search.
+    public func seriesSearch(
+        libraryID: String?,
+        fullTextSearch: String,
+        page: Int,
+        size: Int
+    ) async throws -> Page<KomgaSeries> {
+        let condition = libraryID.flatMap { id in
+            id.isEmpty ? nil : SeriesSearchConditionDto(libraryId: SearchEqualityDto(value: id))
+        }
+        let body = try JSONEncoder().encode(
+            SeriesSearchRequestDto(condition: condition, fullTextSearch: fullTextSearch)
+        )
+        return try await post(
+            path: "/api/v1/series/list",
+            queryItems: paginationQuery(page: page, size: size),
+            body: body
+        )
+    }
+
+    /// Searches books in a series using Komga's server-side full-text search.
+    public func booksSearch(
+        seriesID: String,
+        fullTextSearch: String,
+        page: Int,
+        size: Int
+    ) async throws -> Page<KomgaBook> {
+        let body = try JSONEncoder().encode(
+            BookSearchRequestDto(
+                condition: BookSearchConditionDto(seriesId: SearchEqualityDto(value: seriesID)),
+                fullTextSearch: fullTextSearch
+            )
+        )
+        return try await post(
+            path: "/api/v1/books/list",
+            queryItems: paginationQuery(page: page, size: size),
+            body: body
+        )
+    }
+
     /// Fetches a single series by id.
     public func series(id: String) async throws -> KomgaSeries {
         try await get(path: "/api/v1/series/\(id)")
@@ -224,6 +264,26 @@ public struct KomgaClient: Sendable {
     ) async throws -> T {
         let request = try builder.makeRequest(path: path, queryItems: queryItems)
         let data = try await perform(request)
+        do {
+            return try Self.decoder.decode(T.self, from: data)
+        } catch {
+            Self.logger.error(
+                "Decoding failed for \(path, privacy: .public): \(String(describing: error), privacy: .public)"
+            )
+            throw KomgaError.decoding(error)
+        }
+    }
+
+    /// Sends a JSON POST request and decodes its response.
+    private func post<T: Decodable>(
+        path: String,
+        queryItems: [URLQueryItem] = [],
+        body: Data
+    ) async throws -> T {
+        let request = try builder.makeRequest(
+            method: "POST", path: path, queryItems: queryItems, body: body
+        )
+        let data = try await perform(request, idempotent: true)
         do {
             return try Self.decoder.decode(T.self, from: data)
         } catch {
