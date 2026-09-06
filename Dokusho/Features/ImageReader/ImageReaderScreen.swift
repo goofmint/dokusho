@@ -51,6 +51,7 @@ struct ImageReaderScreen: View {
     /// bottom-strip tap, and together with the header by a center tap.
     @State private var progressVisible = false
     @State private var didResolveInitialState = false
+    @State private var insertBlankPageAtStart = false
 
     /// Persisted background choice; shares its key with the Settings screen.
     @AppStorage(ReaderBackground.storageKey) private var backgroundRaw = ReaderBackground.defaultValue.rawValue
@@ -78,7 +79,12 @@ struct ImageReaderScreen: View {
     @State private var isLandscape = false
 
     private var layout: ReaderLayout {
-        ReaderLayout(pageCount: pageCount, usesSpread: usesSpread, progression: progression)
+        ReaderLayout(
+            pageCount: pageCount,
+            usesSpread: usesSpread,
+            progression: progression,
+            insertBlankPageAtStart: insertBlankPageAtStart
+        )
     }
 
     var body: some View {
@@ -160,6 +166,15 @@ struct ImageReaderScreen: View {
                 .padding(.vertical, 6)
                 .background(.ultraThinMaterial, in: Capsule())
             Spacer()
+            Button {
+                toggleBlankPageAtStart()
+            } label: {
+                Image(systemName: insertBlankPageAtStart ? "rectangle.lefthalf.filled" : "rectangle")
+                    .font(.title3.weight(.semibold))
+                    .padding(10)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+            .accessibilityLabel(insertBlankPageAtStart ? "先頭の空白をオフ" : "先頭に空白")
             Button {
                 toggleDirection()
             } label: {
@@ -248,6 +263,32 @@ struct ImageReaderScreen: View {
         persistDirectionOverride(progression)
     }
 
+    private func toggleBlankPageAtStart() {
+        insertBlankPageAtStart.toggle()
+        persistBlankPageAtStart(insertBlankPageAtStart)
+    }
+
+    private func persistBlankPageAtStart(_ insertBlank: Bool) {
+        let bookID = book.id
+        let descriptor = FetchDescriptor<LocalReadingState>(
+            predicate: #Predicate { $0.bookID == bookID }
+        )
+        if let existing = try? modelContext.fetch(descriptor).first {
+            existing.insertBlankPageAtStart = insertBlank
+            existing.updatedAt = .now
+        } else {
+            modelContext.insert(
+                LocalReadingState(
+                    bookID: bookID,
+                    lastPage: currentPageLabel,
+                    completed: false,
+                    insertBlankPageAtStart: insertBlank
+                )
+            )
+        }
+        try? modelContext.save()
+    }
+
     private func persistDirectionOverride(_ progression: ReadingProgression) {
         let bookID = book.id
         let descriptor = FetchDescriptor<LocalReadingState>(
@@ -276,6 +317,8 @@ struct ImageReaderScreen: View {
 
         // Direction: per-book override wins, else the content's own declared
         // direction, else series metadata, else the user's default setting.
+        insertBlankPageAtStart = localState?.insertBlankPageAtStart ?? false
+
         if let override = ReadingProgression.fromOverride(localState?.readingDirectionOverride) {
             progression = override
         } else if let initialDirectionHint {

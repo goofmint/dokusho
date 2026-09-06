@@ -95,7 +95,14 @@ final class ReaderPageViewController: UIViewController, UIScrollViewDelegate {
         contentStack.spacing = 0
         scrollView.addSubview(contentStack)
 
-        // Build image views in *visual* (left-to-right) order.
+        // Build image views in *visual* (left-to-right) order. A blank slot
+        // has no pages, so it is a background-only container.
+        if case .blank = spread {
+            let blank = UIView()
+            blank.backgroundColor = backgroundColor
+            contentStack.addArrangedSubview(blank)
+            return
+        }
         for page in visualPageOrder() {
             let container = makePageContainer(for: page)
             contentStack.addArrangedSubview(container)
@@ -111,6 +118,8 @@ final class ReaderPageViewController: UIViewController, UIScrollViewDelegate {
             // Reading order is (first, second). For RTL the first-read page sits
             // on the right, so the visual left-to-right order is reversed.
             return progression.isRightToLeft ? [second, first] : [first, second]
+        case .blank:
+            return []
         }
     }
 

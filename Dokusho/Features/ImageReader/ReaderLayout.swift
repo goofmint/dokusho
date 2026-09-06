@@ -11,12 +11,15 @@ enum ReaderSpread: Equatable {
     case single(page: Int)
     /// A two-page spread, `first` read before `second` (reading order).
     case spread(first: Int, second: Int)
+    /// A leading blank slot used only to shift spread pairing. Has no real page.
+    case blank
 
     /// The first page in reading order — used to record progress for the unit.
     var readingOrderFirstPage: Int {
         switch self {
         case let .single(page): return page
         case let .spread(first, _): return first
+        case .blank: return 1
         }
     }
 
@@ -25,6 +28,7 @@ enum ReaderSpread: Equatable {
         switch self {
         case let .single(page): return page
         case let .spread(first, second): return max(first, second)
+        case .blank: return 0
         }
     }
 
@@ -33,6 +37,7 @@ enum ReaderSpread: Equatable {
         switch self {
         case let .single(page): return [page]
         case let .spread(first, second): return [first, second]
+        case .blank: return []
         }
     }
 }
@@ -54,21 +59,52 @@ struct ReaderLayout: Equatable {
     let usesSpread: Bool
     /// The reading progression (affects side placement, not this array's order).
     let progression: ReadingProgression
+    /// Whether a leading blank slot should shift landscape pairing.
+    let insertBlankPageAtStart: Bool
 
     /// The ordered spreads, in reading order.
     let spreads: [ReaderSpread]
 
-    init(pageCount: Int, usesSpread: Bool, progression: ReadingProgression) {
+    init(
+        pageCount: Int,
+        usesSpread: Bool,
+        progression: ReadingProgression,
+        insertBlankPageAtStart: Bool = false
+    ) {
         self.pageCount = pageCount
         self.usesSpread = usesSpread
         self.progression = progression
-        self.spreads = Self.buildSpreads(pageCount: pageCount, usesSpread: usesSpread)
+        self.insertBlankPageAtStart = insertBlankPageAtStart
+        self.spreads = Self.buildSpreads(
+            pageCount: pageCount,
+            usesSpread: usesSpread,
+            insertBlankPageAtStart: insertBlankPageAtStart
+        )
     }
 
-    private static func buildSpreads(pageCount: Int, usesSpread: Bool) -> [ReaderSpread] {
+    private static func buildSpreads(
+        pageCount: Int,
+        usesSpread: Bool,
+        insertBlankPageAtStart: Bool
+    ) -> [ReaderSpread] {
         guard pageCount > 0 else { return [] }
+        // Single-page mode ignores the blank offset; every page stays `.single`.
         guard usesSpread else {
             return (1...pageCount).map { .single(page: $0) }
+        }
+        if insertBlankPageAtStart {
+            var result: [ReaderSpread] = [.blank]
+            var page = 1
+            while page <= pageCount {
+                if page + 1 <= pageCount {
+                    result.append(.spread(first: page, second: page + 1))
+                    page += 2
+                } else {
+                    result.append(.single(page: page))
+                    page += 1
+                }
+            }
+            return result
         }
         var result: [ReaderSpread] = [.single(page: 1)]
         var page = 2
