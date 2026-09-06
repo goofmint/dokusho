@@ -80,6 +80,14 @@ final class DownloadManager {
     /// Resume data retained from a failed/cancelled download, keyed by bookID.
     @ObservationIgnored private var resumeData: [String: Data] = [:]
 
+    /// Books waiting for sequential bulk download. The next book starts only
+    /// after the current task reaches `didComplete`.
+    @ObservationIgnored private var pendingBooks: [KomgaBook] = []
+
+    /// IDs already queued or running as part of a bulk download, used to
+    /// ignore duplicates across overlapping `download(books:)` calls.
+    @ObservationIgnored private var queuedBookIDs: Set<String> = []
+
     /// Book IDs whose in-flight task was cancelled by the user (via
     /// ``cancel(bookID:)``). Lets `didComplete` distinguish a user cancellation
     /// (already handled, silently ignored) from a system-initiated cancellation
@@ -124,6 +132,38 @@ final class DownloadManager {
     }
 
     // MARK: - Public API
+
+    /// Enqueues supported books and starts them one at a time.
+    ///
+    /// Already downloaded, in-flight, or queued books are skipped. Startup
+    /// failures for the book that is started immediately are returned; later
+    /// books wait until the current transfer reaches `didComplete`.
+    func download(books: [KomgaBook]) -> [String: Error] {
+        var failures: [String: Error] = [:]
+        var seen: Set<String> = []
+        for book in books where seen.insert(book.id).inserted {
+            guard SupportedMediaProfile.isSupported(book.media.mediaProfile) else { continue }
+            if queuedBookIDs.contains(book.id) { continue }
+            switch state(for: book.id) {
+            case .downloaded, .downloading:
+                continue
+            case .notDownloaded, .failed:
+                pendingBooks.append(book)
+                queuedBookIDs.insert(book.id)
+            }
+        }
+        startNextQueuedDownload(failures: &failures)
+        return failures
+    }
+
+    /// Whether a supported book can start a new or retried download.
+    func canDownload(_ book: KomgaBook) -> Bool {
+        guard SupportedMediaProfile.isSupported(book.media.mediaProfile) else { return false }
+        switch state(for: book.id) {
+        case .notDownloaded, .failed: return true
+        case .downloading, .downloaded: return false
+        }
+    }
 
     /// Current state for a book. Unknown books are `.notDownloaded`.
     func state(for bookID: String) -> DownloadState {
@@ -312,9 +352,11 @@ final class DownloadManager {
         defer {
             if let bookID {
                 clearActive(bookID: bookID)
+                queuedBookIDs.remove(bookID)
                 // Clear the user-cancel flag on every path so it never leaks.
                 userCancelledBookIDs.remove(bookID)
             }
+            startNextQueuedDownload()
         }
         guard let bookID else { return }
 
@@ -488,6 +530,42 @@ final class DownloadManager {
         } catch {
             logger.error("SwiftData save failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    // MARK: - Sequential bulk download
+
+    /// Starts at most one queued book. Skips books that fail to start and
+    /// records those errors when a collector is provided.
+    private func startNextQueuedDownload(failures: inout [String: Error]) {
+        guard activeTasks.isEmpty else { return }
+        while let book = dequeueNextPending() {
+            do {
+                try download(book: book)
+                if activeTasks[book.id] != nil {
+                    queuedBookIDs.insert(book.id)
+                    return
+                }
+            } catch {
+                failures[book.id] = error
+                states[book.id] = .failed(error)
+                logger.error("Failed to start queued download for book \(book.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// Starts the next queued book after a transfer completes, ignoring
+    /// later startup failures (they are already recorded on the book state).
+    private func startNextQueuedDownload() {
+        var ignored: [String: Error] = [:]
+        startNextQueuedDownload(failures: &ignored)
+    }
+
+    /// Removes and returns the next book waiting for sequential download.
+    private func dequeueNextPending() -> KomgaBook? {
+        guard !pendingBooks.isEmpty else { return nil }
+        let book = pendingBooks.removeFirst()
+        queuedBookIDs.remove(book.id)
+        return book
     }
 
     // MARK: - Bookkeeping
