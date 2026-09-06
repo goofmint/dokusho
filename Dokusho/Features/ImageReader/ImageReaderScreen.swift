@@ -264,7 +264,9 @@ struct ImageReaderScreen: View {
     }
 
     private func toggleBlankPageAtStart() {
+        let page = currentPageLabel
         insertBlankPageAtStart.toggle()
+        currentSpreadIndex = layout.spreadIndex(containing: page)
         persistBlankPageAtStart(insertBlankPageAtStart)
     }
 
