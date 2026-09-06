@@ -14,6 +14,8 @@ final class LocalReadingState {
     var completed: Bool
     /// User override of reading direction (`LEFT_TO_RIGHT` / `RIGHT_TO_LEFT`), or nil to use series metadata.
     var readingDirectionOverride: String?
+    /// When true, landscape spreads insert a leading blank so real pages pair as (1,2), (3,4)…
+    var insertBlankPageAtStart: Bool = false
     var updatedAt: Date
 
     init(
@@ -21,12 +23,14 @@ final class LocalReadingState {
         lastPage: Int,
         completed: Bool,
         readingDirectionOverride: String? = nil,
+        insertBlankPageAtStart: Bool = false,
         updatedAt: Date = .now
     ) {
         self.bookID = bookID
         self.lastPage = lastPage
         self.completed = completed
         self.readingDirectionOverride = readingDirectionOverride
+        self.insertBlankPageAtStart = insertBlankPageAtStart
         self.updatedAt = updatedAt
     }
 }
