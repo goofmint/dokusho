@@ -5,7 +5,7 @@ import KomgaKit
 /// actions. Only ePub/PDF books can be opened; other formats show a
 /// 非対応フォーマット notice.
 ///
-/// The 読む action pushes ``ReaderDestination/book(_:)``. The download row
+/// The 読む action presents the reader full-screen. The download row
 /// reflects ``DownloadManager`` state live: idle → progress + cancel →
 /// downloaded (with delete) / failed (with retry).
 struct BookDetailView: View {
@@ -19,10 +19,12 @@ struct BookDetailView: View {
 
     @Environment(AppServices.self) private var services
     @Environment(DownloadManager.self) private var downloadManager
+    @Environment(ReaderPresentation.self) private var readerPresentation
 
     @State private var downloadActionError: String?
     /// Fresh copy fetched on appear so read progress reflects recent reading.
     @State private var refreshedBook: KomgaBook?
+    @State private var didCompleteInitialRefresh = false
 
     private var book: KomgaBook { refreshedBook ?? initialBook }
 
@@ -46,11 +48,30 @@ struct BookDetailView: View {
         }
         .navigationTitle(displayTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            // Fires on first appearance AND when the pushed reader pops back
-            // (unlike `.task(id:)`, which does not re-fire on pop), so read
-            // progress is refreshed after reading.
-            Task { await refreshBook() }
+        .task {
+            await refreshInitiallyIfNeeded()
+        }
+        .onChange(of: readerPresentation.completedDismissalSequence) {
+            // The sequence changes only after MainView has awaited the progress
+            // flush, so this fetch cannot overtake that PATCH.
+            Task {
+                await refreshBook()
+                if !Task.isCancelled {
+                    didCompleteInitialRefresh = true
+                }
+            }
+        }
+    }
+
+    /// Performs the first fetch once. If presenting the reader cancels this
+    /// task, a same-identity task restarted behind the cover is held back until
+    /// the dismissal completion event performs the ordered refresh.
+    private func refreshInitiallyIfNeeded() async {
+        guard !didCompleteInitialRefresh,
+              !readerPresentation.isReaderTransitionActive else { return }
+        await refreshBook()
+        if !Task.isCancelled {
+            didCompleteInitialRefresh = true
         }
     }
 
@@ -93,11 +114,14 @@ struct BookDetailView: View {
     private var actions: some View {
         VStack(spacing: 12) {
             if isSupported {
-                NavigationLink(value: ReaderDestination.book(book)) {
+                Button {
+                    readerPresentation.present(book)
+                } label: {
                     Label(readButtonTitle, systemImage: "book")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(readerPresentation.isReaderTransitionActive)
 
                 downloadRow
             }

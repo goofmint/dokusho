@@ -13,6 +13,9 @@ struct DokushoApp: App {
     /// Root dependency container injected into the environment.
     @State private var services: AppServices
 
+    /// Shared presentation state for the full-screen online reader.
+    @State private var readerPresentation = ReaderPresentation()
+
     init() {
         let container = PersistenceController.makeContainer()
         modelContainer = container
@@ -25,6 +28,7 @@ struct DokushoApp: App {
         WindowGroup {
             rootView
                 .environment(services)
+                .environment(readerPresentation)
                 .onAppear {
                     appDelegate.downloadManager = services.downloadManager
                 }

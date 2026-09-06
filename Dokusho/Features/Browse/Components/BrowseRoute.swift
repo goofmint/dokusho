@@ -38,27 +38,3 @@ enum BrowseRoute: Hashable {
         }
     }
 }
-
-/// Navigation destination for the reader, opened from a book detail's 読む action.
-///
-/// The reader is implemented in Phase 5: these values push ``ReaderRootView``,
-/// which dispatches to the streaming image reader / ePub / PDF reader by media
-/// profile. `book` carries the full ``KomgaBook`` so the reader has the media
-/// profile, page count, series id, and read progress it needs without an extra
-/// fetch.
-enum ReaderDestination: Hashable {
-    /// Open the reader for the given book.
-    case book(KomgaBook)
-
-    static func == (lhs: ReaderDestination, rhs: ReaderDestination) -> Bool {
-        switch (lhs, rhs) {
-        case let (.book(l), .book(r)): return l.id == r.id
-        }
-    }
-
-    func hash(into hasher: inout Hasher) {
-        switch self {
-        case let .book(book): hasher.combine(book.id)
-        }
-    }
-}
