@@ -50,6 +50,7 @@ struct DTODecodingTests {
         #expect(page.number == 0)
         #expect(page.first == true)
         #expect(page.last == false)
+        #expect(page.totalPages > 1)
 
         let first = page.content[0]
         #expect(first.name == "Yotsuba&!")
@@ -137,6 +138,36 @@ struct DTODecodingTests {
         #expect(page.content[0].readProgress != nil)
         #expect(page.content[1].readProgress == nil)
         #expect(page.content[1].media.mediaProfile == "EPUB")
+        #expect(page.last == true)
+        #expect(page.totalPages == 1)
+    }
+
+    @Test("Empty page fixture decodes with last true and no content")
+    func decodeEmptyPage() throws {
+        let page = try decoder.decode(
+            Page<KomgaBook>.self, from: Fixture.data("empty_page")
+        )
+        #expect(page.content.isEmpty)
+        #expect(page.empty == true)
+        #expect(page.last == true)
+        #expect(page.totalElements == 0)
+        #expect(page.totalPages == 0)
+        #expect(page.numberOfElements == 0)
+    }
+
+    @Test("duplicate ids across two pages keep first occurrence order")
+    func uniqueIDsAcrossPages() throws {
+        let first = try decoder.decode(
+            Page<KomgaBook>.self, from: Fixture.data("books_page")
+        )
+        let second = try decoder.decode(
+            Page<KomgaBook>.self, from: Fixture.data("books_page")
+        )
+        let combined = first.content + second.content
+        var seen: Set<String> = []
+        let unique = combined.filter { seen.insert($0.id).inserted }
+        #expect(unique.map(\.id) == first.content.map(\.id))
+        #expect(Set(unique.map(\.id)).count == unique.count)
     }
 
     @Test("Page list decodes with optional dimensions")

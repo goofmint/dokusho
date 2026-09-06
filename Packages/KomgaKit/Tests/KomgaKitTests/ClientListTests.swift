@@ -40,6 +40,7 @@ struct ClientListTests {
         #expect(query["search"] == "yotsuba")
         #expect(query["page"] == "1")
         #expect(query["size"] == "30")
+        #expect(query["sort"] == nil)
     }
 
     @Test("series omits nil/empty filters")
@@ -51,6 +52,26 @@ struct ClientListTests {
         #expect(query["library_id"] == nil)
         #expect(query["search"] == nil)
         #expect(query["page"] == "0")
+        #expect(query["sort"] == KomgaSort.seriesTitleAsc)
+    }
+
+    @Test("series without search sends titleSort")
+    func seriesSendsTitleSort() async throws {
+        let harness = try MockHarness()
+        harness.stub { _ in .init(data: try Fixture.data("series_page")) }
+        _ = try await harness.client.series(libraryID: "0LIB0001", search: nil, page: 0, size: 20)
+        let query = queryDictionary(try #require(harness.lastRequest))
+        #expect(query["sort"] == "metadata.titleSort,asc")
+    }
+
+    @Test("series with empty search still sends titleSort")
+    func seriesEmptySearchSendsTitleSort() async throws {
+        let harness = try MockHarness()
+        harness.stub { _ in .init(data: try Fixture.data("series_page")) }
+        _ = try await harness.client.series(libraryID: nil, search: "", page: 0, size: 20)
+        let query = queryDictionary(try #require(harness.lastRequest))
+        #expect(query["sort"] == KomgaSort.seriesTitleAsc)
+        #expect(query["search"] == nil)
     }
 
     @Test("series full-text search posts Japanese query and library condition")
@@ -112,6 +133,19 @@ struct ClientListTests {
         let page = try await harness.client.books(seriesID: "0SERIES01", page: 0, size: 20)
         #expect(page.content.count == 2)
         #expect(harness.lastRequest?.url?.path == "/api/v1/series/0SERIES01/books")
+        let query = queryDictionary(try #require(harness.lastRequest))
+        #expect(query["sort"] == KomgaSort.bookNumberAsc)
+    }
+
+    @Test("books always sends numberSort")
+    func booksSendsNumberSort() async throws {
+        let harness = try MockHarness()
+        harness.stub { _ in .init(data: try Fixture.data("books_page")) }
+        _ = try await harness.client.books(seriesID: "0SERIES01", page: 2, size: 10)
+        let query = queryDictionary(try #require(harness.lastRequest))
+        #expect(query["sort"] == "metadata.numberSort,asc")
+        #expect(query["page"] == "2")
+        #expect(query["size"] == "10")
     }
 
     @Test("book hits books/{id}")
