@@ -21,13 +21,24 @@ struct EpubReaderScreen: View {
     @State private var sliderValue: Double = 0
     /// スライダーをユーザーがドラッグしているか。
     @State private var isDraggingSlider = false
+    /// End-of-book CTA visibility. Independent of `headerVisible` / `progressVisible`.
+    @State private var showNextVolumePrompt = false
+
+    /// Next book in the series, if one exists.
+    private let nextVolume: KomgaBook?
+    /// Opens `nextVolume` after the current reader is dismissed.
+    private let onOpenNextVolume: ((KomgaBook) -> Void)?
 
     init(
         book: KomgaBook,
         fileURL: URL,
         initialPage: Int? = nil,
+        nextVolume: KomgaBook? = nil,
+        onOpenNextVolume: ((KomgaBook) -> Void)? = nil,
         onProgress: @escaping @MainActor (Int, Bool) -> Void
     ) {
+        self.nextVolume = nextVolume
+        self.onOpenNextVolume = onOpenNextVolume
         _viewModel = State(
             wrappedValue: EpubReaderViewModel(
                 book: book,
@@ -58,6 +69,9 @@ struct EpubReaderScreen: View {
         }
         .onChange(of: colorScheme) { _, newValue in
             viewModel.setColorScheme(dark: newValue == .dark)
+        }
+        .onChange(of: viewModel.totalProgression) {
+            refreshNextVolumePrompt()
         }
         .statusBarHidden(!headerVisible)
         // Presented inside a navigation stack; hide the nav bar so no empty
@@ -97,6 +111,7 @@ struct EpubReaderScreen: View {
                 navigator: navigator,
                 onLocationChange: { locator in
                     viewModel.handleLocationChange(locator)
+                    refreshNextVolumePrompt()
                 },
                 onError: { error in
                     viewModel.handleNavigatorError(error)
@@ -108,7 +123,28 @@ struct EpubReaderScreen: View {
             .ignoresSafeArea()
 
             hudOverlay
+
+            if showNextVolumePrompt {
+                nextVolumeOverlay
+            }
         }
+    }
+
+    private func refreshNextVolumePrompt() {
+        showNextVolumePrompt = viewModel.totalProgression >= 0.995 && nextVolume != nil
+    }
+
+    private var nextVolumeOverlay: some View {
+        VStack {
+            Spacer()
+                .allowsHitTesting(false)
+            if let nextVolume {
+                NextVolumePromptButton {
+                    onOpenNextVolume?(nextVolume)
+                }
+            }
+        }
+        .padding(.bottom, 48)
     }
 
     /// Fraction of the view height, from the bottom, treated as the

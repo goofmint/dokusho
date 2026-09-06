@@ -26,7 +26,11 @@ struct ReaderRootView: View {
     let book: KomgaBook
 
     @Environment(AppServices.self) private var services
+    @Environment(ReaderPresentation.self) private var readerPresentation
     @Environment(\.modelContext) private var modelContext
+
+    /// Next book in the series, resolved asynchronously after appear.
+    @State private var nextVolume: KomgaBook?
 
     /// Full Phase-1 resolution (adopted page + conflict info) for the confirm UI.
     @State private var resumeResult: ResumeProgressResult?
@@ -44,6 +48,7 @@ struct ReaderRootView: View {
         content
             .navigationBarTitleDisplayMode(.inline)
             .task { resolveResumeIfNeeded() }
+            .task { await resolveNextVolume() }
             .confirmationDialog(
                 "続きの位置が異なります",
                 isPresented: $showResumeConflictDialog,
@@ -98,6 +103,8 @@ struct ReaderRootView: View {
                 fileURL: fileURL,
                 client: services.client,
                 initialPage: confirmedPage,
+                nextVolume: nextVolume,
+                onOpenNextVolume: openNextVolume,
                 onProgress: recordProgress
             )
         } else if let imageLoader = services.imageLoader, let client = services.client {
@@ -106,7 +113,9 @@ struct ReaderRootView: View {
                 source: StreamingPageSource(loader: imageLoader, bookID: book.id),
                 client: client,
                 initialPage: confirmedPage,
-                onProgress: recordProgress
+                onProgress: recordProgress,
+                nextVolume: nextVolume,
+                onOpenNextVolume: openNextVolume
             )
         } else {
             disconnected
@@ -135,6 +144,8 @@ struct ReaderRootView: View {
                 fileURL: fileURL,
                 client: services.client,
                 initialPage: confirmedPage,
+                nextVolume: nextVolume,
+                onOpenNextVolume: openNextVolume,
                 onProgress: recordProgress
             )
         } else {
@@ -247,6 +258,15 @@ struct ReaderRootView: View {
             completed: completed
         )
     }
+
+    private func resolveNextVolume() async {
+        guard services.client != nil else { return }
+        nextVolume = await NextVolumeResolver.resolve(current: book, client: services.client)
+    }
+
+    private func openNextVolume(_ next: KomgaBook) {
+        readerPresentation.requestNextVolume(next)
+    }
 }
 
 /// Routes a downloaded ePub to the right reader.
@@ -264,6 +284,8 @@ struct EpubReaderContainer: View {
     let client: KomgaClient?
     /// Caller-resolved 1-based resume page (local vs. server progress).
     let initialPage: Int?
+    var nextVolume: KomgaBook? = nil
+    var onOpenNextVolume: ((KomgaBook) -> Void)? = nil
     let onProgress: @MainActor (Int, Bool) -> Void
 
     private enum Phase {
@@ -307,13 +329,17 @@ struct EpubReaderContainer: View {
                 initialDirectionHint: source.prefersRightToLeft.map {
                     $0 ? .rightToLeft : .leftToRight
                 },
-                onProgress: onProgress
+                onProgress: onProgress,
+                nextVolume: nextVolume,
+                onOpenNextVolume: onOpenNextVolume
             )
         case .reflowable:
             EpubReaderScreen(
                 book: book,
                 fileURL: fileURL,
                 initialPage: initialPage,
+                nextVolume: nextVolume,
+                onOpenNextVolume: onOpenNextVolume,
                 onProgress: onProgress
             )
         }
@@ -330,6 +356,8 @@ private struct LocalPdfImageReader: View {
     let client: KomgaClient?
     /// Caller-resolved 1-based resume page (local vs. server progress).
     let initialPage: Int?
+    var nextVolume: KomgaBook? = nil
+    var onOpenNextVolume: ((KomgaBook) -> Void)? = nil
     let onProgress: @MainActor (Int, Bool) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -376,7 +404,9 @@ private struct LocalPdfImageReader: View {
                 source: source,
                 client: client,
                 initialPage: initialPage,
-                onProgress: onProgress
+                onProgress: onProgress,
+                nextVolume: nextVolume,
+                onOpenNextVolume: onOpenNextVolume
             )
         case .failed:
             LocalPdfErrorView(onClose: { dismiss() })
