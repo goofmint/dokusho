@@ -73,6 +73,9 @@ struct EpubReaderScreen: View {
         .onChange(of: viewModel.totalProgression) {
             refreshNextVolumePrompt()
         }
+        .onChange(of: nextVolume?.id) {
+            refreshNextVolumePrompt()
+        }
         .statusBarHidden(!headerVisible)
         // Presented inside a navigation stack; hide the nav bar so no empty
         // header area pushes the content down. The HUD's own close button
