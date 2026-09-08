@@ -144,7 +144,10 @@ final class PaginatedList<Element: Sendable & Codable & Identifiable & Equatable
         }
         // Trigger when the last few items become visible.
         let thresholdIndex = items.index(items.endIndex, offsetBy: -5, limitedBy: items.startIndex) ?? items.startIndex
-        if let currentIndex = items.firstIndex(of: currentItem), currentIndex >= thresholdIndex {
+        // Compare by `id` instead of the synthesized deep `Equatable` so that
+        // frequently changing fields (readProgress, booksReadCount, ...) still
+        // match, and so the scan stays cheap while many cells reappear at once.
+        if let currentIndex = items.firstIndex(where: { $0.id == currentItem.id }), currentIndex >= thresholdIndex {
             await loadNextPage(isInitial: false)
             await prefetchWhileSparse()
         }

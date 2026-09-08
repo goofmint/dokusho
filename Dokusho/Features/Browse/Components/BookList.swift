@@ -42,7 +42,7 @@ struct BookList: View {
         List {
             ForEach(list.items) { book in
                 BookRow(book: book, selectedIDs: selectedIDs)
-                    .task { await list.loadMoreIfNeeded(currentItem: book) }
+                    .task(id: book.id) { await list.loadMoreIfNeeded(currentItem: book) }
             }
             if list.isLoadingMore {
                 HStack {
