@@ -88,7 +88,7 @@ private struct ReadListListContent: View {
                         }
                     }
                 }
-                .task { await list.loadMoreIfNeeded(currentItem: readList) }
+                .task(id: readList.id) { await list.loadMoreIfNeeded(currentItem: readList) }
             }
             if list.isLoadingMore {
                 HStack { Spacer(); ProgressView(); Spacer() }

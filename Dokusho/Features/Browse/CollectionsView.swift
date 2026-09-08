@@ -88,7 +88,7 @@ private struct CollectionListContent: View {
                         }
                     }
                 }
-                .task { await list.loadMoreIfNeeded(currentItem: collection) }
+                .task(id: collection.id) { await list.loadMoreIfNeeded(currentItem: collection) }
             }
             if list.isLoadingMore {
                 HStack { Spacer(); ProgressView(); Spacer() }

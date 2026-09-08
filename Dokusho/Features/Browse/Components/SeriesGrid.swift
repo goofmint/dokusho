@@ -44,7 +44,7 @@ struct SeriesGrid: View {
                         SeriesCell(series: series)
                     }
                     .buttonStyle(.plain)
-                    .task { await list.loadMoreIfNeeded(currentItem: series) }
+                    .task(id: series.id) { await list.loadMoreIfNeeded(currentItem: series) }
                 }
             }
             .padding(16)
